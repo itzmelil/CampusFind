@@ -1,7 +1,26 @@
-import { categories, samples, locations, readReports, saveReport, filterReports } from './data.js';
-
 const app = document.querySelector('#app');
 const state = { status: 'all', category: 'All items', query: '', draft: null };
+let renderVersion = 0;
+
+async function api(path, fields) {
+  const options = fields ? { method: 'POST', body: new URLSearchParams(fields) } : {};
+  const response = await fetch(path, options);
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'CampusFind could not complete this request.');
+  return result;
+}
+
+function showError(message) {
+  const parent = app.querySelector('main') || app;
+  let notice = parent.querySelector('.request-error');
+  if (!notice) {
+    notice = document.createElement('p');
+    notice.className = 'request-error surface';
+    notice.setAttribute('role', 'alert');
+    parent.prepend(notice);
+  }
+  notice.textContent = message;
+}
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 })[char]);
@@ -23,10 +42,10 @@ function sidebar(scope, panel) {
   const links = (student ? navStudent : navOffice).map(([key, title, glyph]) =>
     `<a href="${url(scope, key)}" ${key === activePanel ? 'aria-current="page"' : ''}>${icon(glyph)}${title}</a>`).join('');
   return `<aside class="sidebar">
-    <a class="brand" href="${url(scope, 'home')}"><span class="brand-icon">${icon(0)}</span><span>CampusFind<small>${student ? 'Student access' : 'Westbridge Uni'}</small></span></a>
+    <a class="brand" href="${url(scope, 'home')}"><span class="brand-icon">${icon(0)}</span><span>CampusFind<small>${student ? 'Student access' : 'UM Matina'}</small></span></a>
     <nav aria-label="${student ? 'Student' : 'Office'} navigation">${links}</nav>
     <div class="sidebar-bottom">
-      <section class="handoff"><strong>${icon(6)} Safe handoffs</strong><p>Use one of four staffed campus locations when returning an item.</p>${link('View locations ' + icon(7), url(scope, 'safety'))}</section>
+      <section class="handoff"><strong>${icon(6)} Safe handoffs</strong><p>Confirm a staffed handoff point with campus personnel before returning an item.</p>${link('View locations ' + icon(7), url(scope, 'safety'))}</section>
       ${student ? '<button class="account" data-action="logout">' + icon(8) + ' Log out</button>' : link(icon(8) + ' Student sign in', url('office', 'login'), 'account')}
     </div>
   </aside>`;
@@ -54,8 +73,7 @@ const reportCard = (scope, report) => `<a class="item" href="${url(scope, 'item'
   <span aria-hidden="true">${icon(21)}</span>
 </a>`;
 
-function board(scope, reports, home = false) {
-  const visible = filterReports(reports, state);
+function board(scope, { categories, visible }, home = false) {
   const filter = (kind, value, label, index) => `<button class="chip" type="button" data-filter="${kind}" data-value="${value}" aria-pressed="${state[kind] === value}">${index == null ? '' : icon(index)}${label}</button>`;
   return `${home ? '' : intro('Campus board', scope === 'student' ? 'Campus board' : 'Browse items', 'Explore lost and found reports by category or status.')}
     <section class="board" aria-label="Item listings">
@@ -67,21 +85,21 @@ function board(scope, reports, home = false) {
     </section>`;
 }
 
-function home(scope, reports) {
+function home(scope, boardData) {
   const student = scope === 'student';
   return `<section class="hero">
     <div class="hero-copy"><span class="hero-tag">${icon(12)} ${student ? 'Student workspace' : 'Community powered'}</span>
     <h1>${student ? 'Welcome, LYLE<br>Find and return items.' : 'Lost something?<br>Your campus is looking.'}</h1>
-    <p>${student ? 'Report, claim, and recover campus items through the Lost & Found Office.' : 'Report missing items and connect with verified finders across Westbridge University.'}</p>
+    <p>${student ? 'Report, claim, and recover campus items through the Lost & Found Office.' : 'Report missing items and connect with verified finders at the University of Mindanao, Matina campus in Davao City.'}</p>
     ${group(cta('I lost something', scope, 'report', 'lost', true), link('I found something', url(scope, 'report', 'found'), 'button glass'))}</div>
     <div class="hero-art" aria-hidden="true"><img src="./assets/item-1.png" alt=""><img src="./assets/item-2.png" alt=""><span>${icon(11)}</span></div>
   </section>${student ? `<section class="tools"><h2>Student tools</h2><div class="tiles">${[
     ['board', 'Campus board', 'Browse lost and found items on campus.'], ['mine', 'My reports', 'Track your submissions, claims, and handoffs.'],
     ['alerts', 'Alerts', 'Check for updates about your reports and claims.'], ['safety', 'Safety', 'Find staffed handoff locations and privacy tips.'],
-  ].map(([target, title, detail]) => link(`<strong>${title}</strong><b>→</b><small>${detail}</small>`, url(scope, target))).join('')}</div></section>` : board(scope, reports, true)}`;
+  ].map(([target, title, detail]) => link(`<strong>${title}</strong><b>→</b><small>${detail}</small>`, url(scope, target))).join('')}</div></section>` : board(scope, boardData, true)}`;
 }
 
-function report(scope, type) {
+function report(scope, type, categories) {
   const found = type === 'found';
   const draft = state.draft || {};
   return intro('Campus lost & found', 'Report an item', 'Share enough detail for the Lost & Found Office to identify the item.') +
@@ -114,23 +132,24 @@ function itemSummary(report, actions) {
     <dt>Description</dt><dd>${escape(report.description)}</dd></dl>${actions}</article>`;
 }
 
-function safety() {
+function safety(locations) {
   return intro('Safe handoffs', 'Safety & privacy', 'Use staffed locations and protect your personal details when reporting or returning items.') +
     `<section class="surface guidance"><h3>Report privately</h3><p>Keep student IDs, addresses, and contact details out of public descriptions.</p>
     <h3>Verify ownership</h3><p>Use identifying details to verify ownership with the Lost & Found Office.</p>
     <h3>Meet at a staffed location</h3><p>Confirm pickup with the office before bringing or collecting an item.</p></section>
-    <section class="surface"><h2>Staffed handoff locations</h2><p>Example locations. Confirm hours and availability with the Lost & Found Office.</p>
+    <section class="surface"><h2>Staffed handoff locations</h2><p>Illustrative locations at Matina campus. Ask University of Mindanao staff to confirm approved handoff points and hours.</p>
     <ul class="location-list">${locations.map(location => `<li>${location}</li>`).join('')}</ul></section>`;
 }
 
-function panelContent(scope, panel, arg, reports, own) {
+function panelContent(scope, panel, arg, boardData) {
+  const { reports, own, categories, locations } = boardData;
   const type = arg === 'found' ? 'found' : 'lost';
   switch (panel) {
-    case 'board': return board(scope, reports);
-    case 'report': return report(scope, type);
+    case 'board': return board(scope, boardData);
+    case 'report': return report(scope, type, categories);
     case 'preview': return preview(scope, type);
-    case 'safety': return safety();
-    case 'login': return intro('Westbridge University', 'Student sign in', 'Open your student workspace to manage reports and alerts.') +
+    case 'safety': return safety(locations);
+    case 'login': return intro('University of Mindanao · Matina', 'Student sign in', 'Open your student workspace to manage reports and alerts.') +
       `<section class="surface"><h2>Student workspace</h2><p>Explore the student flow using a demo profile.</p>
       ${group(cta('Open Student demo', 'student', 'home'), cta('Back to overview', 'office', 'home', '', true))}</section>`;
     case 'alerts': return intro('Student updates', scope === 'student' ? 'Alerts' : 'My alerts', 'Check match suggestions, claim decisions, and staffed handoff updates.') +
@@ -145,20 +164,28 @@ function panelContent(scope, panel, arg, reports, own) {
         itemSummary(item, group(cta('View handoff locations', scope, 'safety'), cta('Back to campus board', scope, 'board', '', true))) :
         intro('Campus board', 'Item unavailable', 'Return to the campus board to find available reports.') + cta('Browse items', scope, 'board');
     }
-    default: return home(scope, reports);
+    default: return home(scope, boardData);
   }
 }
 
-function render() {
+async function render() {
+  const version = ++renderVersion;
   const [area, page, arg] = route();
   const scope = area === 'student' ? 'student' : 'office';
   const panel = [...navOffice, ...navStudent].some(([key]) => key === page) || ['login', 'preview', 'item'].includes(page) ? page : 'home';
-  const own = readReports();
-  const reports = [...own, ...samples];
+  let boardData;
+  try {
+    const filters = new URLSearchParams({ query: state.query, status: state.status, category: state.category });
+    boardData = await api('/api/board?' + filters);
+  } catch (error) {
+    if (version === renderVersion) showError(error.message);
+    return;
+  }
+  if (version !== renderVersion) return;
   app.innerHTML = `<div class="shell">${sidebar(scope, panel)}<main id="main">
     <header class="toolbar"><form id="search-form" role="search">${icon(9)}<input name="query" type="search" aria-label="Search campus reports" placeholder="Search item, category or campus location" value="${escape(state.query)}"></form>
     ${cta(icon(10) + ' Report item', scope, 'report', 'lost')}</header>
-    ${panelContent(scope, panel, arg, reports, own)}</main>${activity(scope, reports, own)}</div>`;
+    ${panelContent(scope, panel, arg, boardData)}</main>${activity(scope, boardData.reports, boardData.own)}</div>`;
 }
 
 window.addEventListener('hashchange', () => {
@@ -166,7 +193,7 @@ window.addEventListener('hashchange', () => {
   window.scrollTo(0, 0);
 });
 
-app.addEventListener('submit', event => {
+app.addEventListener('submit', async event => {
   event.preventDefault();
   const values = Object.fromEntries(new FormData(event.target));
   const [area] = route();
@@ -177,17 +204,25 @@ app.addEventListener('submit', event => {
     else location.hash = url(scope, 'board');
   }
   if (event.target.id === 'report-form') {
-    state.draft = Object.fromEntries(Object.entries(values).map(([key, value]) => [key, value.trim()]));
-    location.hash = url(scope, 'preview', values.type);
+    const submit = event.submitter;
+    if (submit) submit.disabled = true;
+    try {
+      state.draft = await api('/api/preview', values);
+      if (event.target.isConnected) location.hash = url(scope, 'preview', values.type);
+    } catch (error) {
+      if (event.target.isConnected) showError(error.message);
+    } finally {
+      if (submit) submit.disabled = false;
+    }
   }
 });
 
-app.addEventListener('click', event => {
+app.addEventListener('click', async event => {
   const target = event.target.closest('button');
   if (!target) return;
   if (target.dataset.filter) {
     state[target.dataset.filter] = target.dataset.value;
-    render();
+    await render();
     app.querySelector(`[data-filter="${target.dataset.filter}"][data-value="${target.dataset.value}"]`)?.focus();
   }
   if (target.dataset.action === 'clear') {
@@ -199,16 +234,19 @@ app.addEventListener('click', event => {
     location.hash = url('office', 'home');
   }
   if (target.dataset.action === 'save' && state.draft) {
+    target.disabled = true;
     try {
       const scope = route()[0] === 'student' ? 'student' : 'office';
-      saveReport(state.draft);
+      await api('/api/reports', state.draft);
       state.draft = null;
       state.status = 'all';
       state.category = 'All items';
       state.query = '';
       location.hash = url(scope, scope === 'student' ? 'mine' : 'board');
-    } catch {
-      window.alert('The browser could not save your report. Your draft is still available.');
+    } catch (error) {
+      showError(error.message);
+    } finally {
+      target.disabled = false;
     }
   }
 });
