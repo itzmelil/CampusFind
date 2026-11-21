@@ -66,6 +66,6 @@ The [screenshots folder](screenshots/) contains labeled screenshots of the Java 
 - `src/main/java/campusfind/CampusFindDesktop.java` implements the Swing interface and starts the app.
 - `src/main/java/campusfind/CampusFind.java` implements validation, filtering, sample data, and local report storage.
 - `run-desktop.bat` compiles and launches the app on Windows.
-- `assets/` contains the bundled item photos and icons.
+- `assets/` contains the six bundled item photos and the CampusFind logo.
 
 The bundled logo at `assets/campusfind-logo.png` appears in the sidebar and as the window icon.

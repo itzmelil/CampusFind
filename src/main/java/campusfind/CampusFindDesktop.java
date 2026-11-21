@@ -42,6 +42,10 @@ public final class CampusFindDesktop extends JPanel {
 
     private enum Page { HOME, BOARD, REPORT, PREVIEW, MINE, ALERTS, SAFETY, SIGN_IN, DETAILS }
 
+    private enum Glyph {
+        BRAND_SEARCH, SEARCH, GRID, PLUS, BELL, SHIELD, ARROW, PERSON, CHECK, PHONE, BAG, KEY, BOOK, BOTTLE, SHIRT, MORE
+    }
+
     CampusFindDesktop(Path directory) throws IOException {
         store = new ReportStore(directory);
         saved = store.all();
@@ -91,7 +95,7 @@ public final class CampusFindDesktop extends JPanel {
         sidebar.setBorder(new EmptyBorder(22, 12, 16, 12));
         JPanel top = column();
         JPanel brand = row();
-        JButton logo = button("", brandLogo == null ? 0 : -1, brandLogo == null, () -> go(Page.HOME));
+        JButton logo = button("", brandLogo == null ? Glyph.BRAND_SEARCH : null, brandLogo == null, () -> go(Page.HOME));
         if (brandLogo != null) {
             logo.setIcon(new Icon() {
                 @Override public int getIconWidth() { return 36; }
@@ -118,20 +122,20 @@ public final class CampusFindDesktop extends JPanel {
         brand.add(names);
         top.add(brand);
         top.add(Box.createVerticalStrut(34));
-        top.add(nav(student ? "Student home" : "Overview", 1, Page.HOME));
-        top.add(nav(student ? "Campus board" : "Browse items", 2, Page.BOARD));
-        top.add(nav(student ? "My reports" : "Report item", 3, student ? Page.MINE : Page.REPORT));
-        top.add(nav(student ? "Alerts" : "My alerts", 4, Page.ALERTS));
-        top.add(nav(student ? "Safety" : "Safety & privacy", 5, Page.SAFETY));
+        top.add(nav(student ? "Student home" : "Overview", Glyph.GRID, Page.HOME));
+        top.add(nav(student ? "Campus board" : "Browse items", Glyph.SEARCH, Page.BOARD));
+        top.add(nav(student ? "My reports" : "Report item", Glyph.PLUS, student ? Page.MINE : Page.REPORT));
+        top.add(nav(student ? "Alerts" : "My alerts", Glyph.BELL, Page.ALERTS));
+        top.add(nav(student ? "Safety" : "Safety & privacy", Glyph.SHIELD, Page.SAFETY));
         sidebar.add(top, BorderLayout.NORTH);
         JPanel bottom = column();
         JPanel handoff = card();
         handoff.add(label("Safe handoffs", 13, INK, true));
         handoff.add(copy("Confirm a staffed handoff point before returning an item.", 132, MUTED));
-        handoff.add(button("View locations", 7, false, () -> go(Page.SAFETY)));
+        handoff.add(button("View locations", Glyph.ARROW, false, () -> go(Page.SAFETY)));
         bottom.add(handoff);
         bottom.add(Box.createVerticalStrut(8));
-        bottom.add(button(student ? "Log out" : "Student sign in", 8, false, () -> {
+        bottom.add(button(student ? "Log out" : "Student sign in", Glyph.PERSON, false, () -> {
             if (student) {
                 student = false;
                 draft = null;
@@ -142,7 +146,7 @@ public final class CampusFindDesktop extends JPanel {
         return sidebar;
     }
 
-    private JButton nav(String title, int icon, Page destination) {
+    private JButton nav(String title, Glyph icon, Page destination) {
         boolean active = page == destination || (page == Page.DETAILS && destination == Page.BOARD)
                 || (page == Page.REPORT || page == Page.PREVIEW)
                 && destination == (student ? Page.MINE : Page.REPORT);
@@ -170,10 +174,10 @@ public final class CampusFindDesktop extends JPanel {
         search.addActionListener(event -> search(search.getText()));
         JPanel searchBox = new JPanel(new BorderLayout(6, 0));
         searchBox.setBackground(Color.WHITE);
-        searchBox.add(button("Search", 9, false, () -> search(search.getText())), BorderLayout.WEST);
+        searchBox.add(button("Search", Glyph.SEARCH, false, () -> search(search.getText())), BorderLayout.WEST);
         searchBox.add(search);
         toolbar.add(searchBox);
-        toolbar.add(button("Report item", 10, true, () -> start("lost")), BorderLayout.EAST);
+        toolbar.add(button("Report item", Glyph.PLUS, true, () -> start("lost")), BorderLayout.EAST);
         frame.add(toolbar, BorderLayout.NORTH);
         JPanel content = column();
         switch (page) {
@@ -188,42 +192,42 @@ public final class CampusFindDesktop extends JPanel {
             case PREVIEW -> {
                 intro(content, "REPORT PREVIEW", "Preview " + draft.type() + " report",
                         "Review how the item will appear on the campus board.");
-                summary(content, draft, actions(button("Back to report", -1, false, () -> go(Page.REPORT)),
-                        button("Submit report", -1, true, this::submit)));
+                summary(content, draft, actions(button("Back to report", false, () -> go(Page.REPORT)),
+                        button("Submit report", true, this::submit)));
             }
             case DETAILS -> {
                 intro(content, "CAMPUS BOARD", "Item details",
                         "Review the report and find a safe handoff location.");
-                summary(content, selected, actions(button("View handoff locations", -1, true, () -> go(Page.SAFETY)),
-                        button("Back to campus board", -1, false, () -> go(Page.BOARD))));
+                summary(content, selected, actions(button("View handoff locations", true, () -> go(Page.SAFETY)),
+                        button("Back to campus board", false, () -> go(Page.BOARD))));
             }
             case MINE -> {
                 intro(content, "STUDENT WORKSPACE", "My reports & claims", "Track your reports and staffed handoffs.");
                 if (own().isEmpty()) {
                     message(content, "No reports or claims yet", "Your reports appear here after you submit them.",
-                            actions(button("New report", -1, true, () -> start("lost")),
-                                    button("Browse campus board", -1, false, () -> go(Page.BOARD))));
+                            actions(button("New report", true, () -> start("lost")),
+                                    button("Browse campus board", false, () -> go(Page.BOARD))));
                 } else {
                     content.add(itemGrid(own()));
-                    content.add(actions(button("New report", -1, true, () -> start("lost"))));
+                    content.add(actions(button("New report", true, () -> start("lost"))));
                 }
             }
             case ALERTS -> {
                 intro(content, "STUDENT UPDATES", student ? "Alerts" : "My alerts",
                         "Check updates about reports, claims, and staffed handoffs.");
                 message(content, "You’re all caught up", "Updates from campus staff will appear here.",
-                        actions(button("View my reports", -1, true, () -> go(student ? Page.MINE : Page.SIGN_IN)),
-                                button("Browse items", -1, false, () -> go(Page.BOARD))));
+                        actions(button("View my reports", true, () -> go(student ? Page.MINE : Page.SIGN_IN)),
+                                button("Browse items", false, () -> go(Page.BOARD))));
             }
             case SAFETY -> safety(content);
             case SIGN_IN -> {
                 intro(content, "UNIVERSITY OF MINDANAO · MATINA", "Student sign in",
                         "Open the Student workspace to manage reports and alerts.");
                 message(content, "Student workspace", "Explore CampusFind using the demo student profile.",
-                        actions(button("Open Student demo", -1, true, () -> {
+                        actions(button("Open Student demo", true, () -> {
                             student = true;
                             go(Page.HOME);
-                        }), button("Back to overview", -1, false, () -> go(Page.HOME))));
+                        }), button("Back to overview", false, () -> go(Page.HOME))));
             }
         }
         JScrollPane body = scroll(content);
@@ -253,8 +257,8 @@ public final class CampusFindDesktop extends JPanel {
                 : "Report and recover lost items at the University of Mindanao, Matina campus in Davao City.",
                 315, Color.WHITE));
         copy.add(Box.createVerticalStrut(8));
-        copy.add(actions(button("I lost something", -1, false, () -> start("lost")),
-                button("I found something", -1, false, () -> start("found"))));
+        copy.add(actions(button("I lost something", false, () -> start("lost")),
+                button("I found something", false, () -> start("found"))));
         hero.add(copy, BorderLayout.CENTER);
         JPanel art = new JPanel() {
             @Override protected void paintComponent(Graphics graphics) {
@@ -265,7 +269,7 @@ public final class CampusFindDesktop extends JPanel {
                 g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g.setColor(Color.WHITE);
                 g.fillOval(getWidth() - 38, getHeight() - 37, 34, 34);
-                new UiIcon(11, 16).paintIcon(null, g, getWidth() - 29, getHeight() - 28);
+                new UiIcon(Glyph.CHECK, 16).paintIcon(null, g, getWidth() - 29, getHeight() - 28);
                 g.dispose();
             }
         };
@@ -297,7 +301,7 @@ public final class CampusFindDesktop extends JPanel {
 
     private JPanel toolCard(String title, String description, Page target) {
         JPanel tile = card();
-        tile.add(button(title + "  →", -1, false, () -> go(target)));
+        tile.add(button(title + "  →", false, () -> go(target)));
         tile.add(copy(description, 175, MUTED));
         return tile;
     }
@@ -313,7 +317,7 @@ public final class CampusFindDesktop extends JPanel {
         heading.add(titles);
         JPanel statuses = row();
         for (String filter : List.of("all", "found", "lost")) {
-            statuses.add(button(capitalize(filter), -1, status.equals(filter), () -> {
+            statuses.add(button(capitalize(filter), status.equals(filter), () -> {
                 status = filter;
                 render();
             }));
@@ -324,16 +328,25 @@ public final class CampusFindDesktop extends JPanel {
         filters.setOpaque(false);
         var choices = new ArrayList<>(List.of("All items"));
         choices.addAll(CampusFind.CATEGORIES);
-        for (int i = 0; i < choices.size(); i++) {
-            String name = choices.get(i);
-            filters.add(button(name, 13 + i, category.equals(name), () -> {
+        for (String name : choices) {
+            Glyph icon = switch (name) {
+                case "All items" -> Glyph.GRID;
+                case "Electronics" -> Glyph.PHONE;
+                case "Bags" -> Glyph.BAG;
+                case "Keys" -> Glyph.KEY;
+                case "Books" -> Glyph.BOOK;
+                case "Bottles" -> Glyph.BOTTLE;
+                case "Clothing" -> Glyph.SHIRT;
+                default -> Glyph.MORE;
+            };
+            filters.add(button(name, icon, category.equals(name), () -> {
                 category = name;
                 render();
             }));
         }
         content.add(filters);
         if (!query.isBlank()) content.add(actions(label("Results for “" + query + "”", 12, MUTED, false),
-                button("Clear search", -1, false, () -> search(""))));
+                button("Clear search", false, () -> search(""))));
         content.add(Box.createVerticalStrut(10));
         List<Report> visible = CampusFind.filterReports(all(), query, status, category);
         if (visible.isEmpty()) content.add(label("No items match your search.", 14, MUTED, true));
@@ -347,7 +360,7 @@ public final class CampusFindDesktop extends JPanel {
     }
 
     private JButton itemCard(Report report) {
-        JButton card = button("", -1, false, () -> details(report));
+        JButton card = button("", false, () -> details(report));
         card.setLayout(new BorderLayout(8, 0));
         card.setBorder(new EmptyBorder(8, 8, 8, 8));
         card.getAccessibleContext().setAccessibleName(report.name());
@@ -395,8 +408,8 @@ public final class CampusFindDesktop extends JPanel {
         description.setWrapStyleWord(true);
         JComboBox<String> categories = new JComboBox<>(CampusFind.CATEGORIES.toArray(String[]::new));
         categories.setSelectedItem(draft == null ? null : draft.category());
-        form.add(actions(button("I lost an item", -1, !found, () -> switchType("lost", name, date, location, description, categories)),
-                button("I found an item", -1, found, () -> switchType("found", name, date, location, description, categories))));
+        form.add(actions(button("I lost an item", !found, () -> switchType("lost", name, date, location, description, categories)),
+                button("I found an item", found, () -> switchType("found", name, date, location, description, categories))));
         fieldRow(form, "Item name", name);
         JPanel pair = grid(2);
         JPanel categoryField = column();
@@ -410,14 +423,14 @@ public final class CampusFindDesktop extends JPanel {
         fieldRow(form, "Description", new JScrollPane(description));
         JLabel error = label(" ", 12, RED, true);
         form.add(error);
-        form.add(actions(button("Preview report", -1, true, () -> {
+        form.add(actions(button("Preview report", true, () -> {
             try {
                 draft = CampusFind.validateReport(draftFields(name, date, location, description, categories));
                 go(Page.PREVIEW);
             } catch (IllegalArgumentException invalid) {
                 error.setText(invalid.getMessage());
             }
-        }), button("Cancel", -1, false, () -> {
+        }), button("Cancel", false, () -> {
             draft = null;
             go(student ? Page.MINE : Page.HOME);
         })));
@@ -527,10 +540,10 @@ public final class CampusFindDesktop extends JPanel {
         JPanel content = column();
         content.setBorder(new EmptyBorder(22, 13, 16, 13));
         if (!student) {
-            JButton alerts = button("", 24, false, () -> go(Page.ALERTS));
+            JButton alerts = button("", Glyph.BELL, false, () -> go(Page.ALERTS));
             alerts.getAccessibleContext().setAccessibleName("Alerts");
             alerts.setToolTipText("Alerts");
-            content.add(actions(alerts, button("Student sign in", -1, false, () -> go(Page.SIGN_IN))));
+            content.add(actions(alerts, button("Student sign in", false, () -> go(Page.SIGN_IN))));
             content.add(Box.createVerticalStrut(18));
         }
         content.add(label(student ? "STUDENT WORKSPACE" : "LIVE OVERVIEW", 10, RED, true));
@@ -550,9 +563,9 @@ public final class CampusFindDesktop extends JPanel {
         content.add(Box.createVerticalStrut(16));
         if (!student) {
             content.add(label("Latest reports", 15, INK, true));
-            content.add(button("View all", 28, false, () -> go(Page.BOARD)));
+            content.add(button("View all", Glyph.ARROW, false, () -> go(Page.BOARD)));
             for (Report report : all().stream().limit(3).toList()) {
-                JButton latest = button("", -1, false, () -> details(report));
+                JButton latest = button("", false, () -> details(report));
                 latest.getAccessibleContext().setAccessibleName(report.name());
                 latest.setLayout(new BorderLayout(6, 0));
                 if (!report.image().isEmpty()) latest.add(new JLabel(photo(report, 31)), BorderLayout.WEST);
@@ -567,7 +580,7 @@ public final class CampusFindDesktop extends JPanel {
         safe.setBorder(new EmptyBorder(16, 13, 16, 13));
         safe.add(label("Return it safely", 16, Color.WHITE, true));
         safe.add(copy("Arrange pickup or drop-off at a staffed campus location.", 160, Color.WHITE));
-        safe.add(button("View locations", -1, false, () -> go(Page.SAFETY)));
+        safe.add(button("View locations", false, () -> go(Page.SAFETY)));
         content.add(safe);
         content.setBackground(Color.WHITE);
         content.setOpaque(true);
@@ -645,7 +658,11 @@ public final class CampusFindDesktop extends JPanel {
         return field;
     }
 
-    private JButton button(String text, int icon, boolean primary, Runnable action) {
+    private JButton button(String text, boolean primary, Runnable action) {
+        return button(text, null, primary, action);
+    }
+
+    private JButton button(String text, Glyph icon, boolean primary, Runnable action) {
         JButton button = new JButton() {
             @Override protected void paintComponent(Graphics graphics) {
                 if (primary) paintAccent(graphics, getWidth(), getHeight(), 10);
@@ -666,7 +683,7 @@ public final class CampusFindDesktop extends JPanel {
         };
         button.putClientProperty("html.disable", true);
         button.setText(text);
-        if (icon >= 0) button.setIcon(new UiIcon(icon, icon == 0 ? 21 : 16));
+        if (icon != null) button.setIcon(new UiIcon(icon, icon == Glyph.BRAND_SEARCH ? 21 : 16));
         button.setFont(font(12, true));
         button.setBackground(Color.WHITE);
         button.setForeground(primary ? Color.WHITE : RED);
@@ -831,7 +848,7 @@ public final class CampusFindDesktop extends JPanel {
         g.dispose();
     }
 
-    private record UiIcon(int glyph, int size) implements Icon {
+    private record UiIcon(Glyph glyph, int size) implements Icon {
         @Override public int getIconWidth() { return size; }
         @Override public int getIconHeight() { return size; }
 
@@ -844,60 +861,59 @@ public final class CampusFindDesktop extends JPanel {
             g.setColor(component == null ? RED : component.getForeground());
             g.setStroke(new BasicStroke(1.35f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
             switch (glyph) {
-                case 0, 2, 9 -> {
+                case BRAND_SEARCH, SEARCH -> {
                     g.drawOval(2, 2, 8, 8);
                     path(g, 9, 9, 14, 14);
                 }
-                case 1, 13 -> {
+                case GRID -> {
                     g.drawRoundRect(2, 2, 4, 4, 1, 1);
                     g.drawRoundRect(10, 2, 4, 4, 1, 1);
                     g.drawRoundRect(2, 10, 4, 4, 1, 1);
                     g.drawRoundRect(10, 10, 4, 4, 1, 1);
                 }
-                case 3, 10 -> {
+                case PLUS -> {
                     path(g, 3, 8, 13, 8);
                     path(g, 8, 3, 8, 13);
                 }
-                case 4, 24 -> {
+                case BELL -> {
                     g.drawArc(4, 2, 8, 8, 0, 180);
                     path(g, 4, 6, 4, 9, 2, 11, 14, 11, 12, 9, 12, 6);
                     g.drawArc(6, 11, 4, 3, 180, 180);
                 }
-                case 5 -> {
+                case SHIELD -> {
                     path(g, 8, 2, 13, 4, 13, 9, 11, 12, 8, 14, 5, 12, 3, 9, 3, 4, 8, 2);
                     path(g, 6, 8, 8, 10, 10, 7);
                 }
-                case 7, 28 -> {
+                case ARROW -> {
                     path(g, 3, 8, 13, 8);
                     path(g, 9, 4, 13, 8, 9, 12);
                 }
-                case 8 -> {
+                case PERSON -> {
                     g.drawOval(5, 2, 6, 6);
                     g.drawArc(3, 9, 10, 8, 0, 180);
                 }
-                case 11 -> path(g, 3, 8, 6, 11, 13, 4);
-                case 14 -> {
+                case CHECK -> path(g, 3, 8, 6, 11, 13, 4);
+                case PHONE -> {
                     g.drawRoundRect(4, 1, 8, 14, 2, 2);
                     path(g, 7, 12, 9, 12);
                 }
-                case 15 -> {
+                case BAG -> {
                     g.drawRoundRect(2, 5, 12, 9, 2, 2);
                     g.drawArc(5, 2, 6, 6, 0, 180);
                 }
-                case 16 -> {
+                case KEY -> {
                     g.drawOval(2, 8, 5, 5);
                     path(g, 6, 9, 13, 2, 14, 3);
                     path(g, 10, 5, 12, 7);
                 }
-                case 17 -> {
+                case BOOK -> {
                     path(g, 8, 4, 5, 2, 2, 2, 2, 12, 5, 12, 8, 14, 11, 12, 14, 12, 14, 2, 11, 2, 8, 4, 8, 14);
                 }
-                case 18 -> path(g, 6, 2, 10, 2, 10, 5, 12, 7, 12, 14, 4, 14, 4, 7, 6, 5, 6, 2);
-                case 19 -> path(g, 6, 2, 3, 3, 1, 7, 4, 8, 5, 7, 5, 14, 11, 14, 11, 7, 12, 8, 15, 7, 13, 3, 10, 2, 8, 4, 6, 2);
-                case 20 -> {
+                case BOTTLE -> path(g, 6, 2, 10, 2, 10, 5, 12, 7, 12, 14, 4, 14, 4, 7, 6, 5, 6, 2);
+                case SHIRT -> path(g, 6, 2, 3, 3, 1, 7, 4, 8, 5, 7, 5, 14, 11, 14, 11, 7, 12, 8, 15, 7, 13, 3, 10, 2, 8, 4, 6, 2);
+                case MORE -> {
                     for (int dot : new int[]{3, 8, 13}) g.fillOval(dot - 1, 7, 2, 2);
                 }
-                default -> throw new IllegalArgumentException("Unknown icon: " + glyph);
             }
             g.dispose();
         }
