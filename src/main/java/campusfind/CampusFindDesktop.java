@@ -117,7 +117,7 @@ public final class CampusFindDesktop extends JPanel {
         JPanel bottom = column();
         JPanel handoff = card();
         handoff.add(label("Safe handoffs", 13, INK, true));
-        handoff.add(copy("Confirm a staffed handoff point before returning an item.", 140, MUTED));
+        handoff.add(copy("Confirm a staffed handoff point before returning an item.", 132, MUTED));
         handoff.add(button("View locations", 7, false, () -> go(Page.SAFETY)));
         bottom.add(handoff);
         bottom.add(Box.createVerticalStrut(8));
@@ -133,7 +133,8 @@ public final class CampusFindDesktop extends JPanel {
     }
 
     private JButton nav(String title, int icon, Page destination) {
-        boolean active = page == destination || (page == Page.REPORT || page == Page.PREVIEW)
+        boolean active = page == destination || (page == Page.DETAILS && destination == Page.BOARD)
+                || (page == Page.REPORT || page == Page.PREVIEW)
                 && destination == (student ? Page.MINE : Page.REPORT);
         JButton result = button(title, icon, false, () -> {
             if (destination == Page.REPORT) start("lost");
@@ -152,9 +153,9 @@ public final class CampusFindDesktop extends JPanel {
         frame.setBorder(new EmptyBorder(22, 20, 18, 20));
         JPanel toolbar = new JPanel(new BorderLayout(10, 0));
         toolbar.setOpaque(false);
-        JTextField search = field(query);
-        search.setToolTipText("Search item, category or campus location");
-        search.putClientProperty("JTextField.placeholderText", "Search item, category or campus location");
+        String searchHint = "Search item, category or campus location";
+        JTextField search = field(query, searchHint);
+        search.setToolTipText(searchHint);
         search.getAccessibleContext().setAccessibleName("Search campus reports");
         search.addActionListener(event -> search(search.getText()));
         JPanel searchBox = new JPanel(new BorderLayout(6, 0));
@@ -445,15 +446,36 @@ public final class CampusFindDesktop extends JPanel {
 
     private void summary(JPanel content, Report report, JPanel buttons) {
         JPanel card = card();
-        card.add(label(report.type().toUpperCase() + " · " + report.category(), 11, RED, true));
-        card.add(copy(report.name(), 450, INK, true));
-        if (!report.image().isEmpty()) card.add(new JLabel(photo(report, 92)));
-        card.add(Box.createVerticalStrut(8));
-        card.add(label("Campus location", 13, INK, true));
-        card.add(copy(report.location(), 450, MUTED));
-        if (!report.date().isEmpty()) card.add(label("Date  " + report.date(), 13, INK, false));
-        card.add(label("Description", 13, INK, true));
-        card.add(copy(report.description(), 450, MUTED));
+        boolean hasPhoto = !report.image().isEmpty();
+        int textWidth = hasPhoto ? 295 : 435;
+        JPanel details = column();
+        details.add(label(report.type().toUpperCase(java.util.Locale.ROOT) + " · " + report.category(),
+                11, report.type().equals("found") ? GREEN : RED, true));
+        details.add(Box.createVerticalStrut(5));
+        details.add(copy(report.name(), textWidth, INK, font(19, true)));
+        details.add(Box.createVerticalStrut(12));
+        details.add(label("Campus location", 13, INK, true));
+        details.add(copy(report.location(), textWidth, MUTED));
+        if (!report.date().isEmpty()) {
+            details.add(Box.createVerticalStrut(6));
+            details.add(label("Date  " + report.date(), 13, INK, false));
+        }
+        details.add(Box.createVerticalStrut(8));
+        details.add(label("Description", 13, INK, true));
+        details.add(copy(report.description(), textWidth, MUTED));
+
+        JPanel overview = new JPanel(new BorderLayout(16, 0));
+        overview.setOpaque(false);
+        overview.setAlignmentX(LEFT_ALIGNMENT);
+        if (hasPhoto) {
+            JLabel image = new JLabel(photo(report, 136));
+            image.setVerticalAlignment(SwingConstants.TOP);
+            image.getAccessibleContext().setAccessibleName("Photo of " + report.name());
+            overview.add(image, BorderLayout.WEST);
+        }
+        overview.add(details, BorderLayout.CENTER);
+        card.add(overview);
+        card.add(Box.createVerticalStrut(12));
         card.add(buttons);
         content.add(card);
     }
@@ -490,8 +512,10 @@ public final class CampusFindDesktop extends JPanel {
         JPanel content = column();
         content.setBorder(new EmptyBorder(22, 13, 16, 13));
         if (!student) {
-            content.add(actions(button("Alerts", 24, false, () -> go(Page.ALERTS)),
-                    button("Student sign in", -1, false, () -> go(Page.SIGN_IN))));
+            JButton alerts = button("", 24, false, () -> go(Page.ALERTS));
+            alerts.getAccessibleContext().setAccessibleName("Alerts");
+            alerts.setToolTipText("Alerts");
+            content.add(actions(alerts, button("Student sign in", -1, false, () -> go(Page.SIGN_IN))));
             content.add(Box.createVerticalStrut(18));
         }
         content.add(label(student ? "STUDENT WORKSPACE" : "LIVE OVERVIEW", 10, RED, true));
@@ -513,11 +537,12 @@ public final class CampusFindDesktop extends JPanel {
             content.add(label("Latest reports", 15, INK, true));
             content.add(button("View all", 28, false, () -> go(Page.BOARD)));
             for (Report report : all().stream().limit(3).toList()) {
-                JButton latest = button(report.name(), -1, false, () -> details(report));
-                latest.setIcon(photo(report, 31));
-                latest.setHorizontalAlignment(SwingConstants.LEFT);
-                latest.setFont(font(10, true));
-                latest.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
+                JButton latest = button("", -1, false, () -> details(report));
+                latest.getAccessibleContext().setAccessibleName(report.name());
+                latest.setLayout(new BorderLayout(6, 0));
+                if (!report.image().isEmpty()) latest.add(new JLabel(photo(report, 31)), BorderLayout.WEST);
+                latest.add(copy(report.name(), 132, RED, font(10, true)), BorderLayout.CENTER);
+                latest.setMaximumSize(new Dimension(Integer.MAX_VALUE, latest.getPreferredSize().height));
                 content.add(latest);
                 content.add(Box.createVerticalStrut(4));
             }
@@ -526,7 +551,7 @@ public final class CampusFindDesktop extends JPanel {
         safe.setLayout(new BoxLayout(safe, BoxLayout.Y_AXIS));
         safe.setBorder(new EmptyBorder(16, 13, 16, 13));
         safe.add(label("Return it safely", 16, Color.WHITE, true));
-        safe.add(copy("Arrange pickup or drop-off at a staffed campus location.", 165, Color.WHITE));
+        safe.add(copy("Arrange pickup or drop-off at a staffed campus location.", 160, Color.WHITE));
         safe.add(button("View locations", -1, false, () -> go(Page.SAFETY)));
         content.add(safe);
         content.setBackground(Color.WHITE);
@@ -583,7 +608,22 @@ public final class CampusFindDesktop extends JPanel {
     }
 
     private static JTextField field(String value) {
-        JTextField field = new JTextField(value, 14);
+        return field(value, "");
+    }
+
+    private static JTextField field(String value, String hint) {
+        JTextField field = new JTextField(value, 14) {
+            @Override protected void paintComponent(Graphics graphics) {
+                super.paintComponent(graphics);
+                if (hint.isEmpty() || !getText().isEmpty()) return;
+                Graphics g = graphics.create();
+                g.setFont(getFont());
+                g.setColor(MUTED);
+                FontMetrics metrics = g.getFontMetrics();
+                g.drawString(hint, getInsets().left, (getHeight() - metrics.getHeight()) / 2 + metrics.getAscent());
+                g.dispose();
+            }
+        };
         field.setFont(font(13, false));
         field.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(BORDER),
                 new EmptyBorder(6, 9, 6, 9)));
@@ -709,18 +749,34 @@ public final class CampusFindDesktop extends JPanel {
         return label;
     }
 
-    private static JLabel copy(String text, int width, Color color) {
+    private static JTextArea copy(String text, int width, Color color) {
         return copy(text, width, color, false);
     }
 
-    private static JLabel copy(String text, int width, Color color, boolean bold) {
-        JLabel label = new JLabel("<html><div style='width:" + width + "px'>"
-                + text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-                      .replace("\n", "<br>") + "</div></html>");
-        label.setFont(font(12, bold));
-        label.setForeground(color);
-        label.setAlignmentX(LEFT_ALIGNMENT);
-        return label;
+    private static JTextArea copy(String text, int width, Color color, boolean bold) {
+        return copy(text, width, color, font(12, bold));
+    }
+
+    private static JTextArea copy(String text, int width, Color color, Font typeface) {
+        JTextArea area = new JTextArea(text) {
+            @Override public boolean contains(int x, int y) { return false; }
+        };
+        area.setLineWrap(true);
+        area.setWrapStyleWord(true);
+        area.setEditable(false);
+        area.setFocusable(false);
+        area.setOpaque(false);
+        area.setBorder(null);
+        area.setMargin(new Insets(0, 0, 0, 0));
+        area.setFont(typeface);
+        area.setForeground(color);
+        area.setAlignmentX(LEFT_ALIGNMENT);
+        area.setSize(width, Short.MAX_VALUE);
+        Dimension size = new Dimension(width, area.getPreferredSize().height);
+        area.setPreferredSize(size);
+        area.setMinimumSize(size);
+        area.setMaximumSize(size);
+        return area;
     }
 
     private static Font font(int size, boolean bold) {
