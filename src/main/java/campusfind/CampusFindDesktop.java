@@ -127,6 +127,7 @@ public final class CampusFindDesktop extends JPanel {
             else go(destination);
         });
         result.setHorizontalAlignment(SwingConstants.LEFT);
+        result.setRequestFocusEnabled(false);
         result.setBackground(active ? Color.WHITE : new Color(250, 248, 248));
         result.setForeground(active ? RED : MUTED);
         result.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
@@ -241,7 +242,7 @@ public final class CampusFindDesktop extends JPanel {
                 g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g.setColor(Color.WHITE);
                 g.fillOval(getWidth() - 38, getHeight() - 37, 34, 34);
-                g.drawImage(image("assets/icon-11.png"), getWidth() - 29, getHeight() - 28, 16, 16, null);
+                new UiIcon(11, 16).paintIcon(null, g, getWidth() - 29, getHeight() - 28);
                 g.dispose();
             }
         };
@@ -630,15 +631,24 @@ public final class CampusFindDesktop extends JPanel {
                     graphics.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
                 }
                 super.paintComponent(graphics);
+                if (isFocusOwner()) {
+                    Graphics2D outline = (Graphics2D) graphics.create();
+                    outline.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    outline.setColor(primary ? Color.WHITE : RED);
+                    outline.setStroke(new BasicStroke(1.5f));
+                    outline.drawRoundRect(2, 2, getWidth() - 5, getHeight() - 5, 9, 9);
+                    outline.dispose();
+                }
             }
         };
         button.putClientProperty("html.disable", true);
         button.setText(text);
-        if (icon >= 0) button.setIcon(new ImageIcon(image("assets/icon-" + icon + ".png")));
+        if (icon >= 0) button.setIcon(new UiIcon(icon, icon == 0 ? 21 : 16));
         button.setFont(font(12, true));
         button.setBackground(Color.WHITE);
         button.setForeground(primary ? Color.WHITE : RED);
         button.setContentAreaFilled(false);
+        button.setFocusPainted(false);
         button.setBorder(new EmptyBorder(8, 9, 8, 9));
         button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         button.setAlignmentX(LEFT_ALIGNMENT);
@@ -785,6 +795,85 @@ public final class CampusFindDesktop extends JPanel {
         g.setColor(RED);
         g.fillRoundRect(0, 0, width, height, radius, radius);
         g.dispose();
+    }
+
+    private record UiIcon(int glyph, int size) implements Icon {
+        @Override public int getIconWidth() { return size; }
+        @Override public int getIconHeight() { return size; }
+
+        @Override
+        public void paintIcon(Component component, Graphics graphics, int x, int y) {
+            Graphics2D g = (Graphics2D) graphics.create();
+            g.translate(x, y);
+            g.scale(size / 16.0, size / 16.0);
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g.setColor(component == null ? RED : component.getForeground());
+            g.setStroke(new BasicStroke(1.35f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            switch (glyph) {
+                case 0, 2, 9 -> {
+                    g.drawOval(2, 2, 8, 8);
+                    path(g, 9, 9, 14, 14);
+                }
+                case 1, 13 -> {
+                    g.drawRoundRect(2, 2, 4, 4, 1, 1);
+                    g.drawRoundRect(10, 2, 4, 4, 1, 1);
+                    g.drawRoundRect(2, 10, 4, 4, 1, 1);
+                    g.drawRoundRect(10, 10, 4, 4, 1, 1);
+                }
+                case 3, 10 -> {
+                    path(g, 3, 8, 13, 8);
+                    path(g, 8, 3, 8, 13);
+                }
+                case 4, 24 -> {
+                    g.drawArc(4, 2, 8, 8, 0, 180);
+                    path(g, 4, 6, 4, 9, 2, 11, 14, 11, 12, 9, 12, 6);
+                    g.drawArc(6, 11, 4, 3, 180, 180);
+                }
+                case 5 -> {
+                    path(g, 8, 2, 13, 4, 13, 9, 11, 12, 8, 14, 5, 12, 3, 9, 3, 4, 8, 2);
+                    path(g, 6, 8, 8, 10, 10, 7);
+                }
+                case 7, 28 -> {
+                    path(g, 3, 8, 13, 8);
+                    path(g, 9, 4, 13, 8, 9, 12);
+                }
+                case 8 -> {
+                    g.drawOval(5, 2, 6, 6);
+                    g.drawArc(3, 9, 10, 8, 0, 180);
+                }
+                case 11 -> path(g, 3, 8, 6, 11, 13, 4);
+                case 14 -> {
+                    g.drawRoundRect(4, 1, 8, 14, 2, 2);
+                    path(g, 7, 12, 9, 12);
+                }
+                case 15 -> {
+                    g.drawRoundRect(2, 5, 12, 9, 2, 2);
+                    g.drawArc(5, 2, 6, 6, 0, 180);
+                }
+                case 16 -> {
+                    g.drawOval(2, 8, 5, 5);
+                    path(g, 6, 9, 13, 2, 14, 3);
+                    path(g, 10, 5, 12, 7);
+                }
+                case 17 -> {
+                    path(g, 8, 4, 5, 2, 2, 2, 2, 12, 5, 12, 8, 14, 11, 12, 14, 12, 14, 2, 11, 2, 8, 4, 8, 14);
+                }
+                case 18 -> path(g, 6, 2, 10, 2, 10, 5, 12, 7, 12, 14, 4, 14, 4, 7, 6, 5, 6, 2);
+                case 19 -> path(g, 6, 2, 3, 3, 1, 7, 4, 8, 5, 7, 5, 14, 11, 14, 11, 7, 12, 8, 15, 7, 13, 3, 10, 2, 8, 4, 6, 2);
+                case 20 -> {
+                    for (int dot : new int[]{3, 8, 13}) g.fillOval(dot - 1, 7, 2, 2);
+                }
+                default -> throw new IllegalArgumentException("Unknown icon: " + glyph);
+            }
+            g.dispose();
+        }
+
+        private static void path(Graphics2D graphics, int... coordinates) {
+            var path = new java.awt.geom.Path2D.Float();
+            path.moveTo(coordinates[0], coordinates[1]);
+            for (int i = 2; i < coordinates.length; i += 2) path.lineTo(coordinates[i], coordinates[i + 1]);
+            graphics.draw(path);
+        }
     }
 
     private static final class Surface extends JPanel {
