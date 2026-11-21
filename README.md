@@ -67,3 +67,5 @@ The [screenshots folder](screenshots/) contains labeled screenshots of the Java 
 - `src/main/java/campusfind/CampusFind.java` implements validation, filtering, sample data, and local report storage.
 - `run-desktop.bat` compiles and launches the app on Windows.
 - `assets/` contains the bundled item photos and icons.
+
+To use a custom logo, place a PNG at `assets/campusfind-logo.png`. CampusFind uses it in the sidebar and as the window icon.

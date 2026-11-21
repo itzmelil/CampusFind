@@ -9,6 +9,7 @@ import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -25,7 +26,9 @@ public final class CampusFindDesktop extends JPanel {
     private static final Color BLUSH = new Color(253, 239, 237);
     private static final Color GREEN = new Color(32, 118, 87);
     private static final String DESKTOP_OWNER = "desktop-demo";
+    private static final String LOGO_PATH = "assets/campusfind-logo.png";
     private final ReportStore store;
+    private final BufferedImage brandLogo;
     private final Map<String, BufferedImage> images = new HashMap<>();
     private List<Report> saved;
     private boolean student;
@@ -42,6 +45,7 @@ public final class CampusFindDesktop extends JPanel {
     CampusFindDesktop(Path directory) throws IOException {
         store = new ReportStore(directory);
         saved = store.all();
+        brandLogo = Files.isRegularFile(Path.of(LOGO_PATH)) ? image(LOGO_PATH) : null;
         setLayout(new BorderLayout());
         setBackground(PAPER);
         render();
@@ -53,7 +57,9 @@ public final class CampusFindDesktop extends JPanel {
                 UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName());
                 JFrame window = new JFrame("CampusFind | University of Mindanao Matina");
                 window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-                window.setContentPane(new CampusFindDesktop(args.length == 0 ? Path.of("data") : Path.of(args[0])));
+                CampusFindDesktop app = new CampusFindDesktop(args.length == 0 ? Path.of("data") : Path.of(args[0]));
+                window.setContentPane(app);
+                if (app.brandLogo != null) window.setIconImage(app.brandLogo);
                 window.setMinimumSize(new Dimension(1100, 680));
                 window.setSize(1360, 940);
                 window.setLocationRelativeTo(null);
@@ -85,7 +91,25 @@ public final class CampusFindDesktop extends JPanel {
         sidebar.setBorder(new EmptyBorder(22, 12, 16, 12));
         JPanel top = column();
         JPanel brand = row();
-        JButton logo = button("", 0, true, () -> go(Page.HOME));
+        JButton logo = button("", brandLogo == null ? 0 : -1, brandLogo == null, () -> go(Page.HOME));
+        if (brandLogo != null) {
+            logo.setIcon(new Icon() {
+                @Override public int getIconWidth() { return 36; }
+                @Override public int getIconHeight() { return 36; }
+
+                @Override public void paintIcon(Component component, Graphics graphics, int x, int y) {
+                    Graphics2D g = (Graphics2D) graphics.create();
+                    g.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                            RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+                    double scale = 36.0 / Math.max(brandLogo.getWidth(), brandLogo.getHeight());
+                    int width = (int) Math.round(brandLogo.getWidth() * scale);
+                    int height = (int) Math.round(brandLogo.getHeight() * scale);
+                    g.drawImage(brandLogo, x + (36 - width) / 2, y + (36 - height) / 2, width, height, null);
+                    g.dispose();
+                }
+            });
+            logo.setBorder(new EmptyBorder(2, 2, 2, 2));
+        }
         logo.getAccessibleContext().setAccessibleName("CampusFind home");
         brand.add(logo);
         JPanel names = column();
@@ -127,7 +151,6 @@ public final class CampusFindDesktop extends JPanel {
             else go(destination);
         });
         result.setHorizontalAlignment(SwingConstants.LEFT);
-        result.setRequestFocusEnabled(false);
         result.setBackground(active ? Color.WHITE : new Color(250, 248, 248));
         result.setForeground(active ? RED : MUTED);
         result.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
@@ -649,6 +672,7 @@ public final class CampusFindDesktop extends JPanel {
         button.setForeground(primary ? Color.WHITE : RED);
         button.setContentAreaFilled(false);
         button.setFocusPainted(false);
+        button.setRequestFocusEnabled(false);
         button.setBorder(new EmptyBorder(8, 9, 8, 9));
         button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         button.setAlignmentX(LEFT_ALIGNMENT);
@@ -659,7 +683,9 @@ public final class CampusFindDesktop extends JPanel {
     private BufferedImage image(String path) {
         return images.computeIfAbsent(path, name -> {
             try {
-                return ImageIO.read(Path.of(name).toFile());
+                BufferedImage loaded = ImageIO.read(Path.of(name).toFile());
+                if (loaded == null) throw new IOException("Unsupported image format: " + name);
+                return loaded;
             } catch (IOException error) {
                 throw new java.io.UncheckedIOException("Could not load " + name + ". Run CampusFind from its project folder.", error);
             }
