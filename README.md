@@ -68,4 +68,4 @@ The [screenshots folder](screenshots/) contains labeled screenshots of the Java 
 - `run-desktop.bat` compiles and launches the app on Windows.
 - `assets/` contains the bundled item photos and icons.
 
-To use a custom logo, place a PNG at `assets/campusfind-logo.png`. CampusFind uses it in the sidebar and as the window icon.
+The bundled logo at `assets/campusfind-logo.png` appears in the sidebar and as the window icon.
