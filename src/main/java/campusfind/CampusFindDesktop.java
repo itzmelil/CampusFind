@@ -792,7 +792,9 @@ public final class CampusFindDesktop extends JPanel {
         if (width == 0 || height == 0) return;
         Graphics2D g = (Graphics2D) graphics.create();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g.setColor(RED);
+        g.setPaint(new LinearGradientPaint(0, 0, width, height,
+                new float[]{0f, 0.58f, 1f},
+                new Color[]{new Color(0x65051D), new Color(0xA90B16), new Color(0xD52B25)}));
         g.fillRoundRect(0, 0, width, height, radius, radius);
         g.dispose();
     }
