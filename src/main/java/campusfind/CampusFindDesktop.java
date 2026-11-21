@@ -1,0 +1,773 @@
+package campusfind;
+
+import campusfind.CampusFind.Report;
+import campusfind.CampusFind.ReportStore;
+
+import javax.imageio.ImageIO;
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import java.awt.*;
+import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.nio.file.Path;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+public final class CampusFindDesktop extends JPanel {
+    private static final Color INK = new Color(36, 10, 16);
+    private static final Color MUTED = new Color(117, 103, 106);
+    private static final Color RED = new Color(143, 7, 22);
+    private static final Color PAPER = new Color(248, 247, 246);
+    private static final Color BORDER = new Color(234, 223, 225);
+    private static final Color BLUSH = new Color(253, 239, 237);
+    private static final Color GREEN = new Color(32, 118, 87);
+    private static final String DESKTOP_OWNER = "desktop-demo";
+    private final ReportStore store;
+    private final Map<String, BufferedImage> images = new HashMap<>();
+    private List<Report> saved;
+    private boolean student;
+    private Page page = Page.HOME;
+    private String query = "";
+    private String status = "all";
+    private String category = "All items";
+    private String reportType = "lost";
+    private Report draft;
+    private Report selected;
+
+    private enum Page { HOME, BOARD, REPORT, PREVIEW, MINE, ALERTS, SAFETY, SIGN_IN, DETAILS }
+
+    CampusFindDesktop(Path directory) throws IOException {
+        store = new ReportStore(directory);
+        saved = store.all();
+        setLayout(new BorderLayout());
+        setBorder(new EmptyBorder(18, 36, 18, 36));
+        setOpaque(false);
+        render();
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> {
+            try {
+                UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName());
+                JFrame window = new JFrame("CampusFind | University of Mindanao Matina");
+                window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+                window.setContentPane(new CampusFindDesktop(args.length == 0 ? Path.of("data") : Path.of(args[0])));
+                window.setMinimumSize(new Dimension(1100, 680));
+                window.setSize(1360, 940);
+                window.setLocationRelativeTo(null);
+                window.setVisible(true);
+            } catch (Exception failure) {
+                JOptionPane.showMessageDialog(null, failure.getMessage(), "CampusFind", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+    }
+
+    @Override
+    protected void paintComponent(Graphics graphics) {
+        gradient(graphics, getWidth(), getHeight(), 0, new Color(203, 10, 58));
+        super.paintComponent(graphics);
+    }
+
+    private void go(Page destination) {
+        page = destination;
+        render();
+    }
+
+    private void render() {
+        removeAll();
+        JPanel surround = new Surface(new Color(255, 255, 255, 48), 30, false);
+        surround.setLayout(new BorderLayout());
+        surround.setBorder(new EmptyBorder(18, 18, 18, 18));
+        JPanel shell = new JPanel(new BorderLayout());
+        shell.setBackground(PAPER);
+        shell.add(sidebar(), BorderLayout.WEST);
+        shell.add(mainPanel(), BorderLayout.CENTER);
+        shell.add(activity(), BorderLayout.EAST);
+        surround.add(shell);
+        add(surround);
+        revalidate();
+        repaint();
+    }
+
+    private JPanel sidebar() {
+        JPanel sidebar = new JPanel(new BorderLayout());
+        sidebar.setBackground(new Color(250, 248, 248));
+        sidebar.setPreferredSize(new Dimension(194, 0));
+        sidebar.setBorder(new EmptyBorder(22, 12, 16, 12));
+        JPanel top = column();
+        JPanel brand = row();
+        JButton logo = button("", 0, true, () -> go(Page.HOME));
+        logo.getAccessibleContext().setAccessibleName("CampusFind home");
+        brand.add(logo);
+        JPanel names = column();
+        names.add(label("CampusFind", 17, INK, true));
+        names.add(label(student ? "STUDENT ACCESS" : "UM MATINA", 10, MUTED, true));
+        brand.add(names);
+        top.add(brand);
+        top.add(Box.createVerticalStrut(34));
+        top.add(nav(student ? "Student home" : "Overview", 1, Page.HOME));
+        top.add(nav(student ? "Campus board" : "Browse items", 2, Page.BOARD));
+        top.add(nav(student ? "My reports" : "Report item", 3, student ? Page.MINE : Page.REPORT));
+        top.add(nav(student ? "Alerts" : "My alerts", 4, Page.ALERTS));
+        top.add(nav(student ? "Safety" : "Safety & privacy", 5, Page.SAFETY));
+        sidebar.add(top, BorderLayout.NORTH);
+        JPanel bottom = column();
+        JPanel handoff = card();
+        handoff.add(label("Safe handoffs", 13, INK, true));
+        handoff.add(copy("Confirm a staffed handoff point before returning an item.", 140, MUTED));
+        handoff.add(button("View locations", 7, false, () -> go(Page.SAFETY)));
+        bottom.add(handoff);
+        bottom.add(Box.createVerticalStrut(8));
+        bottom.add(button(student ? "Log out" : "Student sign in", 8, false, () -> {
+            if (student) {
+                student = false;
+                draft = null;
+                go(Page.HOME);
+            } else go(Page.SIGN_IN);
+        }));
+        sidebar.add(bottom, BorderLayout.SOUTH);
+        return sidebar;
+    }
+
+    private JButton nav(String title, int icon, Page destination) {
+        boolean active = page == destination || (page == Page.REPORT || page == Page.PREVIEW)
+                && destination == (student ? Page.MINE : Page.REPORT);
+        JButton result = button(title, icon, false, () -> {
+            if (destination == Page.REPORT) start("lost");
+            else go(destination);
+        });
+        result.setHorizontalAlignment(SwingConstants.LEFT);
+        result.setBackground(active ? Color.WHITE : new Color(250, 248, 248));
+        result.setForeground(active ? RED : MUTED);
+        result.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
+        return result;
+    }
+
+    private JPanel mainPanel() {
+        JPanel frame = new JPanel(new BorderLayout(0, 16));
+        frame.setBackground(PAPER);
+        frame.setBorder(new EmptyBorder(22, 20, 18, 20));
+        JPanel toolbar = new JPanel(new BorderLayout(10, 0));
+        toolbar.setOpaque(false);
+        JTextField search = field(query);
+        search.setToolTipText("Search item, category or campus location");
+        search.putClientProperty("JTextField.placeholderText", "Search item, category or campus location");
+        search.getAccessibleContext().setAccessibleName("Search campus reports");
+        search.addActionListener(event -> search(search.getText()));
+        JPanel searchBox = new JPanel(new BorderLayout(6, 0));
+        searchBox.setBackground(Color.WHITE);
+        searchBox.add(button("Search", 9, false, () -> search(search.getText())), BorderLayout.WEST);
+        searchBox.add(search);
+        toolbar.add(searchBox);
+        toolbar.add(button("Report item", 10, true, () -> start("lost")), BorderLayout.EAST);
+        frame.add(toolbar, BorderLayout.NORTH);
+        JPanel content = column();
+        switch (page) {
+            case HOME -> {
+                content.add(hero());
+                content.add(Box.createVerticalStrut(18));
+                if (student) studentTools(content);
+                else board(content, true);
+            }
+            case BOARD -> board(content, false);
+            case REPORT -> report(content);
+            case PREVIEW -> {
+                intro(content, "REPORT PREVIEW", "Preview " + draft.type() + " report",
+                        "Review how the item will appear on the campus board.");
+                summary(content, draft, actions(button("Back to report", -1, false, () -> go(Page.REPORT)),
+                        button("Submit report", -1, true, this::submit)));
+            }
+            case DETAILS -> {
+                intro(content, "CAMPUS BOARD", "Item details",
+                        "Review the report and find a safe handoff location.");
+                summary(content, selected, actions(button("View handoff locations", -1, true, () -> go(Page.SAFETY)),
+                        button("Back to campus board", -1, false, () -> go(Page.BOARD))));
+            }
+            case MINE -> {
+                intro(content, "STUDENT WORKSPACE", "My reports & claims", "Track your reports and staffed handoffs.");
+                if (own().isEmpty()) {
+                    message(content, "No reports or claims yet", "Your reports appear here after you submit them.",
+                            actions(button("New report", -1, true, () -> start("lost")),
+                                    button("Browse campus board", -1, false, () -> go(Page.BOARD))));
+                } else {
+                    content.add(itemGrid(own()));
+                    content.add(actions(button("New report", -1, true, () -> start("lost"))));
+                }
+            }
+            case ALERTS -> {
+                intro(content, "STUDENT UPDATES", student ? "Alerts" : "My alerts",
+                        "Check updates about reports, claims, and staffed handoffs.");
+                message(content, "You’re all caught up", "Updates from campus staff will appear here.",
+                        actions(button("View my reports", -1, true, () -> go(student ? Page.MINE : Page.SIGN_IN)),
+                                button("Browse items", -1, false, () -> go(Page.BOARD))));
+            }
+            case SAFETY -> safety(content);
+            case SIGN_IN -> {
+                intro(content, "UNIVERSITY OF MINDANAO · MATINA", "Student sign in",
+                        "Open the Student workspace to manage reports and alerts.");
+                message(content, "Student workspace", "Explore CampusFind using the demo student profile.",
+                        actions(button("Open Student demo", -1, true, () -> {
+                            student = true;
+                            go(Page.HOME);
+                        }), button("Back to overview", -1, false, () -> go(Page.HOME))));
+            }
+        }
+        frame.add(scroll(content));
+        return frame;
+    }
+
+    private void search(String value) {
+        query = value;
+        go(Page.BOARD);
+    }
+
+    private JPanel hero() {
+        JPanel hero = new Surface(null, 20, true);
+        hero.setLayout(new BorderLayout(4, 0));
+        hero.setBorder(new EmptyBorder(23, 23, 20, 17));
+        JPanel copy = column();
+        copy.add(label(student ? "STUDENT WORKSPACE" : "COMMUNITY POWERED", 11, Color.WHITE, true));
+        copy.add(Box.createVerticalStrut(11));
+        copy.add(label(student ? "Welcome, LYLE" : "Lost something?", 35, Color.WHITE, true));
+        copy.add(label(student ? "Find and return items." : "Your campus is looking.", 31, Color.WHITE, true));
+        copy.add(Box.createVerticalStrut(10));
+        copy.add(copy(student ? "Report, claim, and recover campus items through the Lost & Found Office."
+                : "Report and recover lost items at the University of Mindanao, Matina campus in Davao City.",
+                315, Color.WHITE));
+        copy.add(Box.createVerticalStrut(8));
+        copy.add(actions(button("I lost something", -1, false, () -> start("lost")),
+                button("I found something", -1, false, () -> start("found"))));
+        hero.add(copy, BorderLayout.CENTER);
+        JPanel art = new JPanel() {
+            @Override protected void paintComponent(Graphics graphics) {
+                super.paintComponent(graphics);
+                drawTiltedPhoto(graphics, "assets/item-1.png", getWidth() - 79, getHeight() - 114, 72, 12);
+                drawTiltedPhoto(graphics, "assets/item-2.png", 0, getHeight() - 59, 56, -12);
+                Graphics2D g = (Graphics2D) graphics.create();
+                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g.setColor(Color.WHITE);
+                g.fillOval(getWidth() - 38, getHeight() - 37, 34, 34);
+                g.drawImage(image("assets/icon-11.png"), getWidth() - 29, getHeight() - 28, 16, 16, null);
+                g.dispose();
+            }
+        };
+        art.setOpaque(false);
+        art.setPreferredSize(new Dimension(126, 0));
+        hero.add(art, BorderLayout.EAST);
+        return hero;
+    }
+
+    private void drawTiltedPhoto(Graphics graphics, String file, int x, int y, int size, int angle) {
+        Graphics2D g = (Graphics2D) graphics.create();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.rotate(Math.toRadians(angle), x + size / 2.0, y + size / 2.0);
+        g.setClip(new java.awt.geom.RoundRectangle2D.Double(x, y, size, size, 15, 15));
+        g.drawImage(image(file), x, y, size, size, null);
+        g.dispose();
+    }
+
+    private void studentTools(JPanel content) {
+        content.add(label("Student tools", 20, INK, true));
+        content.add(Box.createVerticalStrut(8));
+        JPanel grid = grid(2);
+        grid.add(toolCard("Campus board", "Browse lost and found items on campus.", Page.BOARD));
+        grid.add(toolCard("My reports", "Track your submissions and handoffs.", Page.MINE));
+        grid.add(toolCard("Alerts", "Check updates about your reports.", Page.ALERTS));
+        grid.add(toolCard("Safety", "Find staffed handoff locations and privacy tips.", Page.SAFETY));
+        content.add(grid);
+    }
+
+    private JPanel toolCard(String title, String description, Page target) {
+        JPanel tile = card();
+        tile.add(button(title + "  →", -1, false, () -> go(target)));
+        tile.add(copy(description, 175, MUTED));
+        return tile;
+    }
+
+    private void board(JPanel content, boolean overview) {
+        if (!overview) intro(content, "CAMPUS BOARD", student ? "Campus board" : "Browse items",
+                "Explore lost and found reports by category or status.");
+        JPanel heading = new JPanel(new BorderLayout());
+        heading.setOpaque(false);
+        JPanel titles = column();
+        titles.add(label("CAMPUS ACTIVITY", 10, RED, true));
+        titles.add(label(overview ? "Recently reported" : "Latest reports", 19, INK, true));
+        heading.add(titles);
+        JPanel statuses = row();
+        for (String filter : List.of("all", "found", "lost")) {
+            statuses.add(button(capitalize(filter), -1, status.equals(filter), () -> {
+                status = filter;
+                render();
+            }));
+        }
+        heading.add(statuses, BorderLayout.EAST);
+        content.add(heading);
+        JPanel filters = new JPanel(new GridLayout(2, 4, 5, 4));
+        filters.setOpaque(false);
+        var choices = new ArrayList<>(List.of("All items"));
+        choices.addAll(CampusFind.CATEGORIES);
+        for (int i = 0; i < choices.size(); i++) {
+            String name = choices.get(i);
+            filters.add(button(name, 13 + i, category.equals(name), () -> {
+                category = name;
+                render();
+            }));
+        }
+        content.add(filters);
+        if (!query.isBlank()) content.add(actions(label("Results for “" + query + "”", 12, MUTED, false),
+                button("Clear search", -1, false, () -> search(""))));
+        content.add(Box.createVerticalStrut(10));
+        List<Report> visible = CampusFind.filterReports(all(), query, status, category);
+        if (visible.isEmpty()) content.add(label("No items match your search.", 14, MUTED, true));
+        else content.add(itemGrid(visible));
+    }
+
+    private JPanel itemGrid(List<Report> reports) {
+        JPanel grid = grid(2);
+        for (Report report : reports) grid.add(itemCard(report));
+        return grid;
+    }
+
+    private JButton itemCard(Report report) {
+        JButton card = button("", -1, false, () -> details(report));
+        card.setLayout(new BorderLayout(8, 0));
+        card.setBorder(new EmptyBorder(8, 8, 8, 8));
+        card.setPreferredSize(new Dimension(230, 91));
+        card.getAccessibleContext().setAccessibleName(report.name());
+        JLabel photo = new JLabel(report.image().isEmpty() ? "+" : "");
+        photo.setIcon(photo(report, 69));
+        photo.setPreferredSize(new Dimension(69, 69));
+        photo.setHorizontalAlignment(SwingConstants.CENTER);
+        photo.setOpaque(true);
+        photo.setBackground(BLUSH);
+        card.add(photo, BorderLayout.WEST);
+        JPanel information = column();
+        information.add(label(report.type().toUpperCase() + " · " + report.category(), 10,
+                report.type().equals("found") ? GREEN : RED, true));
+        information.add(Box.createVerticalStrut(5));
+        information.add(copy(report.name(), 145, INK, true));
+        information.add(copy(report.location(), 145, MUTED));
+        card.add(information);
+        return card;
+    }
+
+    private void details(Report report) {
+        selected = report;
+        go(Page.DETAILS);
+    }
+
+    private void start(String type) {
+        draft = null;
+        reportType = type;
+        go(Page.REPORT);
+    }
+
+    private void report(JPanel content) {
+        boolean found = reportType.equals("found");
+        intro(content, "CAMPUS LOST & FOUND", "Report an item",
+                "Share enough detail for the Lost & Found Office to identify the item.");
+        JPanel form = card();
+        form.add(label("What happened?", 15, INK, true));
+        JTextField name = field(draft == null ? "" : draft.name());
+        JTextField date = field(draft == null ? LocalDate.now().toString() : draft.date());
+        JTextField location = field(draft == null ? "" : draft.location());
+        JTextArea description = new JTextArea(draft == null ? "" : draft.description(), 3, 18);
+        description.setLineWrap(true);
+        description.setWrapStyleWord(true);
+        JComboBox<String> categories = new JComboBox<>(CampusFind.CATEGORIES.toArray(String[]::new));
+        categories.setSelectedItem(draft == null ? null : draft.category());
+        form.add(actions(button("I lost an item", -1, !found, () -> switchType("lost", name, date, location, description, categories)),
+                button("I found an item", -1, found, () -> switchType("found", name, date, location, description, categories))));
+        fieldRow(form, "Item name", name);
+        JPanel pair = grid(2);
+        JPanel categoryField = column();
+        JPanel dateField = column();
+        fieldRow(categoryField, "Category", categories);
+        fieldRow(dateField, found ? "Date found (YYYY-MM-DD)" : "Date last seen (YYYY-MM-DD)", date);
+        pair.add(categoryField);
+        pair.add(dateField);
+        form.add(pair);
+        fieldRow(form, found ? "Found at" : "Last seen at", location);
+        fieldRow(form, "Description", new JScrollPane(description));
+        JLabel error = label(" ", 12, RED, true);
+        form.add(error);
+        form.add(actions(button("Preview report", -1, true, () -> {
+            try {
+                draft = CampusFind.validateReport(draftFields(name, date, location, description, categories));
+                go(Page.PREVIEW);
+            } catch (IllegalArgumentException invalid) {
+                error.setText(invalid.getMessage());
+            }
+        }), button("Cancel", -1, false, () -> {
+            draft = null;
+            go(student ? Page.MINE : Page.HOME);
+        })));
+        content.add(form);
+        content.add(copy("Keep names, student IDs, and other personal information out of your report.", 475, MUTED));
+    }
+
+    private void switchType(String type, JTextField name, JTextField date, JTextField location,
+                            JTextArea description, JComboBox<String> categories) {
+        if (type.equals(reportType)) return;
+        var fields = draftFields(name, date, location, description, categories);
+        reportType = type;
+        draft = new Report("", "", fields.get("name"), fields.get("category"), type,
+                fields.get("date"), fields.get("location"), fields.get("description"), "");
+        go(Page.REPORT);
+    }
+
+    private Map<String, String> draftFields(JTextField name, JTextField date, JTextField location,
+                                             JTextArea description, JComboBox<String> categories) {
+        Object choice = categories.getSelectedItem();
+        return Map.of("type", reportType, "name", name.getText(), "date", date.getText(),
+                "location", location.getText(), "description", description.getText(),
+                "category", choice == null ? "" : choice.toString());
+    }
+
+    private void submit() {
+        try {
+            var updated = new ArrayList<>(saved);
+            updated.addFirst(store.save(draft, DESKTOP_OWNER));
+            saved = List.copyOf(updated);
+            draft = null;
+            query = "";
+            status = "all";
+            category = "All items";
+            go(student ? Page.MINE : Page.BOARD);
+        } catch (IOException failure) {
+            JOptionPane.showMessageDialog(this, "CampusFind could not save your report. Your draft is still open.",
+                    "CampusFind", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void summary(JPanel content, Report report, JPanel buttons) {
+        JPanel card = card();
+        card.add(label(report.type().toUpperCase() + " · " + report.category(), 11, RED, true));
+        card.add(copy(report.name(), 450, INK, true));
+        if (!report.image().isEmpty()) card.add(new JLabel(photo(report, 92)));
+        card.add(Box.createVerticalStrut(8));
+        card.add(label("Campus location", 13, INK, true));
+        card.add(copy(report.location(), 450, MUTED));
+        if (!report.date().isEmpty()) card.add(label("Date  " + report.date(), 13, INK, false));
+        card.add(label("Description", 13, INK, true));
+        card.add(copy(report.description(), 450, MUTED));
+        card.add(buttons);
+        content.add(card);
+    }
+
+    private void safety(JPanel content) {
+        intro(content, "SAFE HANDOFFS", "Safety & privacy",
+                "Protect your personal details and arrange returns through a staffed campus location.");
+        JPanel guidance = card();
+        for (String[] item : new String[][]{
+                {"Report privately", "Keep student IDs, addresses, and contact details out of public descriptions."},
+                {"Verify ownership", "Confirm identifying details with campus staff."},
+                {"Meet at a staffed location", "Confirm pickup or drop-off with campus staff before going."}}) {
+            guidance.add(label(item[0], 15, INK, true));
+            guidance.add(copy(item[1], 450, MUTED));
+            guidance.add(Box.createVerticalStrut(8));
+        }
+        content.add(guidance);
+        content.add(Box.createVerticalStrut(12));
+        JPanel locations = card();
+        locations.add(label("Staffed handoff locations", 19, INK, true));
+        locations.add(copy("Example locations. Ask UM Matina staff to confirm approved points and hours.", 435, MUTED));
+        JPanel grid = grid(2);
+        for (String location : CampusFind.LOCATIONS) {
+            JPanel tile = new Surface(BLUSH, 10, false);
+            tile.setBorder(new EmptyBorder(10, 10, 10, 10));
+            tile.add(label(location, 13, INK, true));
+            grid.add(tile);
+        }
+        locations.add(grid);
+        content.add(locations);
+    }
+
+    private JScrollPane activity() {
+        JPanel content = column();
+        content.setBorder(new EmptyBorder(22, 13, 16, 13));
+        if (!student) {
+            content.add(actions(button("Alerts", 24, false, () -> go(Page.ALERTS)),
+                    button("Student sign in", -1, false, () -> go(Page.SIGN_IN))));
+            content.add(Box.createVerticalStrut(18));
+        }
+        content.add(label(student ? "STUDENT WORKSPACE" : "LIVE OVERVIEW", 10, RED, true));
+        content.add(label(student ? "Your activity" : "Campus pulse", 19, INK, true));
+        content.add(Box.createVerticalStrut(10));
+        JPanel stats = grid(2);
+        if (student) {
+            stats.add(stat(own().size(), "My reports", BLUSH));
+            stats.add(stat(0, "Pending claims", PAPER));
+            stats.add(stat(0, "Unread alerts", BLUSH));
+            stats.add(stat(0, "Active handoffs", PAPER));
+        } else {
+            stats.add(stat(all().size(), "Active reports", BLUSH));
+            stats.add(stat(1, "Items returned", new Color(238, 245, 242)));
+        }
+        content.add(stats);
+        content.add(Box.createVerticalStrut(16));
+        if (!student) {
+            content.add(label("Latest reports", 15, INK, true));
+            content.add(button("View all", 28, false, () -> go(Page.BOARD)));
+            for (Report report : all().stream().limit(3).toList()) {
+                JButton latest = button(report.name(), -1, false, () -> details(report));
+                latest.setIcon(photo(report, 31));
+                latest.setHorizontalAlignment(SwingConstants.LEFT);
+                latest.setFont(font(10, true));
+                latest.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
+                content.add(latest);
+                content.add(Box.createVerticalStrut(4));
+            }
+        }
+        JPanel safe = new Surface(null, 16, true);
+        safe.setLayout(new BoxLayout(safe, BoxLayout.Y_AXIS));
+        safe.setBorder(new EmptyBorder(16, 13, 16, 13));
+        safe.add(label("Return it safely", 16, Color.WHITE, true));
+        safe.add(copy("Arrange pickup or drop-off at a staffed campus location.", 165, Color.WHITE));
+        safe.add(button("View locations", -1, false, () -> go(Page.SAFETY)));
+        content.add(safe);
+        content.setBackground(Color.WHITE);
+        content.setOpaque(true);
+        JScrollPane scroll = scroll(content);
+        scroll.setPreferredSize(new Dimension(234, 0));
+        return scroll;
+    }
+
+    private JPanel stat(int count, String name, Color fill) {
+        JPanel tile = new Surface(fill, 12, false);
+        tile.setLayout(new BoxLayout(tile, BoxLayout.Y_AXIS));
+        tile.setBorder(new EmptyBorder(11, 8, 11, 8));
+        tile.add(label(Integer.toString(count), 24, INK, true));
+        tile.add(label(name, 10, MUTED, false));
+        return tile;
+    }
+
+    private List<Report> own() {
+        return saved.stream().filter(report -> report.owner().equals(DESKTOP_OWNER)).toList();
+    }
+
+    private List<Report> all() {
+        var all = new ArrayList<>(saved);
+        all.addAll(CampusFind.SAMPLES);
+        return all;
+    }
+
+    private void intro(JPanel content, String tag, String title, String text) {
+        content.add(label(tag, 11, RED, true));
+        content.add(Box.createVerticalStrut(5));
+        content.add(label(title, 30, INK, true));
+        content.add(copy(text, 455, MUTED));
+        content.add(Box.createVerticalStrut(12));
+    }
+
+    private void message(JPanel content, String title, String text, JPanel actions) {
+        JPanel card = card();
+        card.add(label(title, 20, INK, true));
+        card.add(copy(text, 435, MUTED));
+        card.add(Box.createVerticalStrut(9));
+        card.add(actions);
+        content.add(card);
+    }
+
+    private static void fieldRow(JPanel panel, String title, JComponent input) {
+        panel.add(Box.createVerticalStrut(9));
+        JLabel label = label(title, 12, INK, true);
+        label.setLabelFor(input instanceof JScrollPane scroll ? scroll.getViewport().getView() : input);
+        panel.add(label);
+        input.setAlignmentX(LEFT_ALIGNMENT);
+        input.setMaximumSize(new Dimension(Integer.MAX_VALUE, input instanceof JScrollPane ? 76 : 34));
+        panel.add(input);
+    }
+
+    private static JTextField field(String value) {
+        JTextField field = new JTextField(value, 14);
+        field.setFont(font(13, false));
+        field.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(BORDER),
+                new EmptyBorder(6, 9, 6, 9)));
+        return field;
+    }
+
+    private JButton button(String text, int icon, boolean primary, Runnable action) {
+        JButton button = new JButton() {
+            @Override protected void paintComponent(Graphics graphics) {
+                if (primary) gradient(graphics, getWidth(), getHeight(), 10, new Color(101, 5, 29));
+                else {
+                    graphics.setColor(getModel().isRollover() ? BLUSH : getBackground());
+                    graphics.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
+                }
+                super.paintComponent(graphics);
+            }
+        };
+        button.putClientProperty("html.disable", true);
+        button.setText(text);
+        if (icon >= 0) button.setIcon(new ImageIcon(image("assets/icon-" + icon + ".png")));
+        button.setFont(font(12, true));
+        button.setBackground(Color.WHITE);
+        button.setForeground(primary ? Color.WHITE : RED);
+        button.setContentAreaFilled(false);
+        button.setBorder(new EmptyBorder(8, 9, 8, 9));
+        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        button.setAlignmentX(LEFT_ALIGNMENT);
+        button.addActionListener(event -> action.run());
+        return button;
+    }
+
+    private BufferedImage image(String path) {
+        return images.computeIfAbsent(path, name -> {
+            try {
+                return ImageIO.read(Path.of(name).toFile());
+            } catch (IOException error) {
+                throw new java.io.UncheckedIOException("Could not load " + name + ". Run CampusFind from its project folder.", error);
+            }
+        });
+    }
+
+    private Icon photo(Report report, int size) {
+        if (report.image().isEmpty()) return null;
+        BufferedImage source = image(report.image());
+        BufferedImage thumbnail = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = thumbnail.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.setClip(new java.awt.geom.RoundRectangle2D.Double(0, 0, size, size, 13, 13));
+        g.drawImage(source, 0, 0, size, size, null);
+        g.dispose();
+        return new ImageIcon(thumbnail);
+    }
+
+    private static JPanel card() {
+        JPanel card = new Surface(Color.WHITE, 15, false);
+        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
+        card.setBorder(new EmptyBorder(15, 15, 15, 15));
+        return card;
+    }
+
+    private static JPanel column() {
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setOpaque(false);
+        panel.setAlignmentX(LEFT_ALIGNMENT);
+        return panel;
+    }
+
+    private static JPanel row() {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 3));
+        row.setOpaque(false);
+        row.setAlignmentX(LEFT_ALIGNMENT);
+        return row;
+    }
+
+    private static JPanel actions(Component... components) {
+        JPanel row = row();
+        for (Component component : components) row.add(component);
+        return row;
+    }
+
+    private static JPanel grid(int columns) {
+        JPanel grid = new JPanel(new GridLayout(0, columns, 8, 8));
+        grid.setOpaque(false);
+        grid.setAlignmentX(LEFT_ALIGNMENT);
+        return grid;
+    }
+
+    private static JScrollPane scroll(JPanel panel) {
+        for (Component child : panel.getComponents()) {
+            if (child instanceof JComponent component) component.setAlignmentX(LEFT_ALIGNMENT);
+        }
+        JPanel wrapper = new ScrollColumn();
+        Color background = panel.isOpaque() ? panel.getBackground() : PAPER;
+        wrapper.setBackground(background);
+        wrapper.add(panel, BorderLayout.NORTH);
+        JScrollPane scroll = new JScrollPane(wrapper);
+        scroll.getViewport().setBackground(background);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.getVerticalScrollBar().setUnitIncrement(18);
+        return scroll;
+    }
+
+    private static final class ScrollColumn extends JPanel implements Scrollable {
+        ScrollColumn() { super(new BorderLayout()); }
+        @Override public Dimension getPreferredScrollableViewportSize() { return getPreferredSize(); }
+        @Override public int getScrollableUnitIncrement(Rectangle visible, int axis, int direction) { return 18; }
+        @Override public int getScrollableBlockIncrement(Rectangle visible, int axis, int direction) {
+            return Math.max(18, visible.height - 18);
+        }
+        @Override public boolean getScrollableTracksViewportWidth() { return true; }
+        @Override public boolean getScrollableTracksViewportHeight() { return false; }
+    }
+
+    private static JLabel label(String text, int size, Color color, boolean bold) {
+        JLabel label = new JLabel();
+        label.putClientProperty("html.disable", true);
+        label.setText(text);
+        label.setFont(font(size, bold));
+        label.setForeground(color);
+        label.setAlignmentX(LEFT_ALIGNMENT);
+        return label;
+    }
+
+    private static JLabel copy(String text, int width, Color color) {
+        return copy(text, width, color, false);
+    }
+
+    private static JLabel copy(String text, int width, Color color, boolean bold) {
+        JLabel label = new JLabel("<html><div style='width:" + width + "px'>"
+                + text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                      .replace("\n", "<br>") + "</div></html>");
+        label.setFont(font(12, bold));
+        label.setForeground(color);
+        label.setAlignmentX(LEFT_ALIGNMENT);
+        return label;
+    }
+
+    private static Font font(int size, boolean bold) {
+        return new Font(Font.SANS_SERIF, bold ? Font.BOLD : Font.PLAIN, size);
+    }
+
+    private static String capitalize(String value) {
+        return Character.toUpperCase(value.charAt(0)) + value.substring(1);
+    }
+
+    private static void gradient(Graphics graphics, int width, int height, int radius, Color start) {
+        if (width == 0 || height == 0) return;
+        Graphics2D g = (Graphics2D) graphics.create();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setPaint(new LinearGradientPaint(0, 0, width, height, new float[]{0, .55f, 1},
+                new Color[]{start, new Color(176, 8, 18), new Color(232, 62, 54)}));
+        g.fillRoundRect(0, 0, width, height, radius, radius);
+        g.dispose();
+    }
+
+    private static final class Surface extends JPanel {
+        private final Color fill;
+        private final int radius;
+        private final boolean shaded;
+
+        Surface(Color fill, int radius, boolean shaded) {
+            this.fill = fill;
+            this.radius = radius;
+            this.shaded = shaded;
+            setOpaque(false);
+            setAlignmentX(LEFT_ALIGNMENT);
+        }
+
+        @Override protected void paintComponent(Graphics graphics) {
+            if (shaded) gradient(graphics, getWidth(), getHeight(), radius, new Color(101, 5, 29));
+            else {
+                Graphics2D g = (Graphics2D) graphics.create();
+                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g.setColor(fill);
+                g.fillRoundRect(0, 0, getWidth(), getHeight(), radius, radius);
+                if (fill.equals(Color.WHITE)) {
+                    g.setColor(BORDER);
+                    g.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, radius, radius);
+                }
+                g.dispose();
+            }
+            super.paintComponent(graphics);
+        }
+    }
+}

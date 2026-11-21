@@ -12,7 +12,21 @@ This is the **Second Deliverable — Initial Progress (50%)**. The Office and St
 | Zen Afi Inarsao | UI/UX design and documentation |
 | Heinz Colman | Coding |
 
-## Run locally
+## Run the Java desktop app
+
+On Windows, extract the repository ZIP and open the project folder. Double-click **`run-desktop.bat`**, or run `./run-desktop.bat` from PowerShell. The launcher compiles the Swing app with the Java 21 JDK and opens the desktop window. A browser and a running HTTP server are optional for this version.
+
+On macOS or Linux, run these commands from the project folder with the Java 21 JDK:
+
+```sh
+mkdir -p build/desktop
+javac -encoding UTF-8 -d build/desktop src/main/java/campusfind/CampusFind.java src/main/java/campusfind/CampusFindDesktop.java
+java -cp build/desktop campusfind.CampusFindDesktop
+```
+
+The desktop version includes the Office overview, Campus Board, item details, Student demo, My Reports, Alerts, Safety, and the report form and preview. It uses the same Java validation and report storage as the web version. Desktop submissions appear under the desktop demo profile in My Reports.
+
+## Run the web version locally
 
 1. Clone or download this repository and open a terminal in its root directory.
 2. With Java 21 or later installed, run the Java source from the repository root.
@@ -60,6 +74,8 @@ The [screenshots folder](screenshots/) contains labeled desktop captures from th
 ## Source layout
 
 - `index.html` loads the application.
+- `src/main/java/campusfind/CampusFindDesktop.java` implements the native Swing interface.
+- `run-desktop.bat` compiles and launches the desktop version on Windows.
 - `src/app.js` renders the browser panels and connects form interactions to the Java API.
 - `src/main/java/campusfind/CampusFind.java` serves the app and implements report validation, filtering, sample data, and local file storage.
 - `src/styles.css` defines the shared layout and responsive styling.

@@ -22,11 +22,11 @@ import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 public final class CampusFind {
-    private static final List<String> CATEGORIES =
+    static final List<String> CATEGORIES =
             List.of("Electronics", "Bags", "Keys", "Books", "Bottles", "Clothing", "Other");
-    private static final List<String> LOCATIONS = List.of(
+    static final List<String> LOCATIONS = List.of(
             "Library", "Main entrance", "Student services area", "Campus security desk");
-    private static final List<Report> SAMPLES = List.of(
+    static final List<Report> SAMPLES = List.of(
             sample(1, "Blue game controller", "Other", "found", "Student commons"),
             sample(2, "Black leather shoulder bag", "Bags", "lost", "Campus canteen"),
             sample(3, "Over-ear wired headphones", "Electronics", "found", "Covered walkway"),
@@ -89,18 +89,21 @@ public final class CampusFind {
         String owner = browserId(exchange);
         var all = new ArrayList<>(saved);
         all.addAll(SAMPLES);
-        String query = filters.getOrDefault("query", "").strip().toLowerCase(Locale.ROOT);
-        String status = filters.getOrDefault("status", "all");
-        String category = filters.getOrDefault("category", "All items");
-        List<Report> visible = all.stream().filter(report ->
-                (status.equals("all") || report.type.equals(status))
-                && (category.equals("All items") || report.category.equals(category))
-                && String.join(" ", report.name, report.category, report.location)
-                         .toLowerCase(Locale.ROOT).contains(query)).toList();
+        List<Report> visible = filterReports(all, filters.getOrDefault("query", ""),
+                filters.getOrDefault("status", "all"), filters.getOrDefault("category", "All items"));
         List<Report> own = saved.stream().filter(report -> report.owner.equals(owner)).toList();
         json(exchange, 200, "{\"reports\":" + reportList(all) + ",\"visible\":" + reportList(visible)
                 + ",\"own\":" + reportList(own) + ",\"categories\":" + stringList(CATEGORIES)
                 + ",\"locations\":" + stringList(LOCATIONS) + "}");
+    }
+
+    static List<Report> filterReports(List<Report> reports, String search, String status, String category) {
+        String query = search.strip().toLowerCase(Locale.ROOT);
+        return reports.stream().filter(report ->
+                (status.equals("all") || report.type.equals(status))
+                && (category.equals("All items") || report.category.equals(category))
+                && String.join(" ", report.name, report.category, report.location)
+                         .toLowerCase(Locale.ROOT).contains(query)).toList();
     }
 
     private void servePage(HttpExchange exchange, String path) throws IOException {
@@ -124,7 +127,10 @@ public final class CampusFind {
         if (body.length > 8192) {
             throw new IllegalArgumentException("The report is too long.");
         }
-        var fields = decode(new String(body, StandardCharsets.UTF_8));
+        return validateReport(decode(new String(body, StandardCharsets.UTF_8)));
+    }
+
+    static Report validateReport(Map<String, String> fields) {
         String type = required(fields, "type", "Report type", 5);
         String category = required(fields, "category", "Category", 20);
         String date = required(fields, "date", "Date", 10);
@@ -227,7 +233,7 @@ public final class CampusFind {
         exchange.getResponseBody().write(body);
     }
 
-    private record Report(String id, String owner, String name, String category, String type,
+    record Report(String id, String owner, String name, String category, String type,
                           String date, String location, String description, String image) {
         private Map<String, String> fields() {
             return Map.of("id", id, "name", name, "category", category, "type", type, "date", date,
@@ -239,14 +245,14 @@ public final class CampusFind {
         }
     }
 
-    private static final class ReportStore {
+    static final class ReportStore {
         private final Path directory;
 
-        private ReportStore(Path directory) throws IOException {
+        ReportStore(Path directory) throws IOException {
             this.directory = Files.createDirectories(directory);
         }
 
-        private Report save(Report draft, String owner) throws IOException {
+        Report save(Report draft, String owner) throws IOException {
             String id = UUID.randomUUID().toString();
             Report report = new Report(id, owner, draft.name, draft.category, draft.type, draft.date,
                     draft.location, draft.description, "");
@@ -266,7 +272,7 @@ public final class CampusFind {
             return report;
         }
 
-        private List<Report> all() throws IOException {
+        List<Report> all() throws IOException {
             var stored = new ArrayList<Properties>();
             try (var files = Files.newDirectoryStream(directory, "*.properties")) {
                 for (Path file : files) {
