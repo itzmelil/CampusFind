@@ -43,8 +43,7 @@ public final class CampusFindDesktop extends JPanel {
         store = new ReportStore(directory);
         saved = store.all();
         setLayout(new BorderLayout());
-        setBorder(new EmptyBorder(18, 36, 18, 36));
-        setOpaque(false);
+        setBackground(PAPER);
         render();
     }
 
@@ -65,12 +64,6 @@ public final class CampusFindDesktop extends JPanel {
         });
     }
 
-    @Override
-    protected void paintComponent(Graphics graphics) {
-        gradient(graphics, getWidth(), getHeight(), 0, new Color(203, 10, 58));
-        super.paintComponent(graphics);
-    }
-
     private void go(Page destination) {
         page = destination;
         render();
@@ -78,16 +71,9 @@ public final class CampusFindDesktop extends JPanel {
 
     private void render() {
         removeAll();
-        JPanel surround = new Surface(new Color(255, 255, 255, 48), 30, false);
-        surround.setLayout(new BorderLayout());
-        surround.setBorder(new EmptyBorder(18, 18, 18, 18));
-        JPanel shell = new JPanel(new BorderLayout());
-        shell.setBackground(PAPER);
-        shell.add(sidebar(), BorderLayout.WEST);
-        shell.add(mainPanel(), BorderLayout.CENTER);
-        shell.add(activity(), BorderLayout.EAST);
-        surround.add(shell);
-        add(surround);
+        add(sidebar(), BorderLayout.WEST);
+        add(mainPanel(), BorderLayout.CENTER);
+        add(activity(), BorderLayout.EAST);
         revalidate();
         repaint();
     }
@@ -336,7 +322,6 @@ public final class CampusFindDesktop extends JPanel {
         JButton card = button("", -1, false, () -> details(report));
         card.setLayout(new BorderLayout(8, 0));
         card.setBorder(new EmptyBorder(8, 8, 8, 8));
-        card.setPreferredSize(new Dimension(230, 91));
         card.getAccessibleContext().setAccessibleName(report.name());
         JLabel photo = new JLabel(report.image().isEmpty() ? "+" : "");
         photo.setIcon(photo(report, 69));
@@ -349,9 +334,11 @@ public final class CampusFindDesktop extends JPanel {
         information.add(label(report.type().toUpperCase() + " · " + report.category(), 10,
                 report.type().equals("found") ? GREEN : RED, true));
         information.add(Box.createVerticalStrut(5));
-        information.add(copy(report.name(), 145, INK, true));
-        information.add(copy(report.location(), 145, MUTED));
+        information.add(copy(report.name(), 190, INK, true));
+        information.add(copy(report.location(), 190, MUTED));
         card.add(information);
+        Dimension preferred = card.getPreferredSize();
+        card.setPreferredSize(new Dimension(preferred.width, Math.max(91, preferred.height)));
         return card;
     }
 
@@ -633,7 +620,7 @@ public final class CampusFindDesktop extends JPanel {
     private JButton button(String text, int icon, boolean primary, Runnable action) {
         JButton button = new JButton() {
             @Override protected void paintComponent(Graphics graphics) {
-                if (primary) gradient(graphics, getWidth(), getHeight(), 10, new Color(101, 5, 29));
+                if (primary) paintAccent(graphics, getWidth(), getHeight(), 10);
                 else {
                     graphics.setColor(getModel().isRollover() ? BLUSH : getBackground());
                     graphics.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
@@ -787,12 +774,11 @@ public final class CampusFindDesktop extends JPanel {
         return Character.toUpperCase(value.charAt(0)) + value.substring(1);
     }
 
-    private static void gradient(Graphics graphics, int width, int height, int radius, Color start) {
+    private static void paintAccent(Graphics graphics, int width, int height, int radius) {
         if (width == 0 || height == 0) return;
         Graphics2D g = (Graphics2D) graphics.create();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g.setPaint(new LinearGradientPaint(0, 0, width, height, new float[]{0, .55f, 1},
-                new Color[]{start, new Color(176, 8, 18), new Color(232, 62, 54)}));
+        g.setColor(RED);
         g.fillRoundRect(0, 0, width, height, radius, radius);
         g.dispose();
     }
@@ -811,7 +797,7 @@ public final class CampusFindDesktop extends JPanel {
         }
 
         @Override protected void paintComponent(Graphics graphics) {
-            if (shaded) gradient(graphics, getWidth(), getHeight(), radius, new Color(101, 5, 29));
+            if (shaded) paintAccent(graphics, getWidth(), getHeight(), radius);
             else {
                 Graphics2D g = (Graphics2D) graphics.create();
                 g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);

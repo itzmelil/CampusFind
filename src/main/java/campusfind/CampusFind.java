@@ -1,25 +1,16 @@
 package campusfind;
 
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
-
 import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
-import java.util.concurrent.Executors;
-import java.util.stream.Collectors;
 
 public final class CampusFind {
     static final List<String> CATEGORIES =
@@ -34,68 +25,7 @@ public final class CampusFind {
             sample(5, "Black canvas backpack", "Bags", "found", "Student services area"),
             sample(6, "Midnight blue headphones", "Electronics", "found", "Library"));
 
-    private final Path root = Path.of("").toAbsolutePath();
-    private final ReportStore reports;
-
-    private CampusFind(Path data) throws IOException {
-        reports = new ReportStore(data);
-    }
-
-    public static void main(String[] args) throws IOException {
-        int port = args.length > 0 ? Integer.parseInt(args[0]) : 8000;
-        Path data = args.length > 1 ? Path.of(args[1]) : Path.of("data");
-        CampusFind app = new CampusFind(data);
-        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
-        server.createContext("/", app::handle);
-        server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
-        server.start();
-        System.out.println("CampusFind is running at http://127.0.0.1:" + server.getAddress().getPort());
-    }
-
-    private void handle(HttpExchange exchange) throws IOException {
-        try (exchange) {
-            try {
-                String path = exchange.getRequestURI().getPath();
-                String method = exchange.getRequestMethod();
-                if (path.equals("/api/board") && method.equals("GET")) {
-                    board(exchange);
-                } else if ((path.equals("/api/preview") || path.equals("/api/reports")) && method.equals("POST")) {
-                    Report draft = readDraft(exchange);
-                    if (path.equals("/api/reports")) {
-                        draft = reports.save(draft, browserId(exchange));
-                    }
-                    json(exchange, 200, draft.json());
-                } else if (path.startsWith("/api/")) {
-                    json(exchange, 404, object(Map.of("error", "This endpoint is unavailable.")));
-                } else if (method.equals("GET")) {
-                    servePage(exchange, path);
-                } else {
-                    send(exchange, 405, "text/plain; charset=utf-8", "Method not allowed.".getBytes(StandardCharsets.UTF_8));
-                }
-            } catch (IllegalArgumentException invalid) {
-                json(exchange, 400, object(Map.of("error", invalid.getMessage())));
-            } catch (IOException failure) {
-                System.err.println(failure.getMessage());
-                if (exchange.getResponseCode() == -1) {
-                    json(exchange, 500, object(Map.of("error", "CampusFind could not complete this request.")));
-                }
-            }
-        }
-    }
-
-    private void board(HttpExchange exchange) throws IOException {
-        var filters = decode(exchange.getRequestURI().getRawQuery());
-        var saved = reports.all();
-        String owner = browserId(exchange);
-        var all = new ArrayList<>(saved);
-        all.addAll(SAMPLES);
-        List<Report> visible = filterReports(all, filters.getOrDefault("query", ""),
-                filters.getOrDefault("status", "all"), filters.getOrDefault("category", "All items"));
-        List<Report> own = saved.stream().filter(report -> report.owner.equals(owner)).toList();
-        json(exchange, 200, "{\"reports\":" + reportList(all) + ",\"visible\":" + reportList(visible)
-                + ",\"own\":" + reportList(own) + ",\"categories\":" + stringList(CATEGORIES)
-                + ",\"locations\":" + stringList(LOCATIONS) + "}");
-    }
+    private CampusFind() {}
 
     static List<Report> filterReports(List<Report> reports, String search, String status, String category) {
         String query = search.strip().toLowerCase(Locale.ROOT);
@@ -104,30 +34,6 @@ public final class CampusFind {
                 && (category.equals("All items") || report.category.equals(category))
                 && String.join(" ", report.name, report.category, report.location)
                          .toLowerCase(Locale.ROOT).contains(query)).toList();
-    }
-
-    private void servePage(HttpExchange exchange, String path) throws IOException {
-        String type = switch (path) {
-            case "/", "/index.html" -> "text/html; charset=utf-8";
-            case "/src/app.js" -> "text/javascript; charset=utf-8";
-            case "/src/styles.css" -> "text/css; charset=utf-8";
-            case "/assets/manrope.woff2" -> "font/woff2";
-            default -> path.matches("/assets/(item|icon)-[0-9]+\\.png") ? "image/png" : null;
-        };
-        Path file = root.resolve(path.equals("/") ? "index.html" : path.substring(1));
-        if (type == null || !Files.isRegularFile(file)) {
-            send(exchange, 404, "text/plain; charset=utf-8", "Page not found.".getBytes(StandardCharsets.UTF_8));
-            return;
-        }
-        send(exchange, 200, type, Files.readAllBytes(file));
-    }
-
-    private static Report readDraft(HttpExchange exchange) throws IOException {
-        byte[] body = exchange.getRequestBody().readNBytes(8193);
-        if (body.length > 8192) {
-            throw new IllegalArgumentException("The report is too long.");
-        }
-        return validateReport(decode(new String(body, StandardCharsets.UTF_8)));
     }
 
     static Report validateReport(Map<String, String> fields) {
@@ -158,79 +64,10 @@ public final class CampusFind {
         return value;
     }
 
-    private static Map<String, String> decode(String input) {
-        var values = new LinkedHashMap<String, String>();
-        if (input == null || input.isEmpty()) return values;
-        for (String field : input.split("&")) {
-            String[] pair = field.split("=", 2);
-            if (pair.length == 2) {
-                values.put(URLDecoder.decode(pair[0], StandardCharsets.UTF_8),
-                        URLDecoder.decode(pair[1], StandardCharsets.UTF_8));
-            }
-        }
-        return values;
-    }
-
-    private static String browserId(HttpExchange exchange) {
-        String cookie = exchange.getRequestHeaders().getFirst("Cookie");
-        if (cookie != null) {
-            for (String value : cookie.split(";")) {
-                String trimmed = value.trim();
-                if (trimmed.matches("campusfind=[a-f0-9-]{36}")) {
-                    return trimmed.substring("campusfind=".length());
-                }
-            }
-        }
-        String id = UUID.randomUUID().toString();
-        exchange.getResponseHeaders().add("Set-Cookie",
-                "campusfind=" + id + "; Path=/api; HttpOnly; SameSite=Strict; Max-Age=31536000");
-        return id;
-    }
-
     private static Report sample(int number, String name, String category, String type, String location) {
         return new Report("sample-" + number, "", name, category, type, "", "Matina Campus · " + location,
                 "Contact campus staff to confirm identifying details and arrange a staffed handoff.",
                 "./assets/item-" + number + ".png");
-    }
-
-    private static String reportList(List<Report> reports) {
-        return reports.stream().map(Report::json).collect(Collectors.joining(",", "[", "]"));
-    }
-
-    private static String stringList(List<String> values) {
-        return values.stream().map(CampusFind::quote).collect(Collectors.joining(",", "[", "]"));
-    }
-
-    private static String object(Map<String, String> fields) {
-        return fields.entrySet().stream().map(entry -> quote(entry.getKey()) + ":" + quote(entry.getValue()))
-                .collect(Collectors.joining(",", "{", "}"));
-    }
-
-    private static String quote(String value) {
-        var quoted = new StringBuilder("\"");
-        for (char character : value.toCharArray()) {
-            switch (character) {
-                case '"' -> quoted.append("\\\"");
-                case '\\' -> quoted.append("\\\\");
-                default -> {
-                    if (character < 32) quoted.append(String.format("\\u%04x", (int) character));
-                    else quoted.append(character);
-                }
-            }
-        }
-        return quoted.append('"').toString();
-    }
-
-    private static void json(HttpExchange exchange, int status, String body) throws IOException {
-        exchange.getResponseHeaders().set("Cache-Control", "no-store");
-        send(exchange, status, "application/json; charset=utf-8", body.getBytes(StandardCharsets.UTF_8));
-    }
-
-    private static void send(HttpExchange exchange, int status, String type, byte[] body) throws IOException {
-        exchange.getResponseHeaders().set("Content-Type", type);
-        exchange.getResponseHeaders().set("X-Content-Type-Options", "nosniff");
-        exchange.sendResponseHeaders(status, body.length);
-        exchange.getResponseBody().write(body);
     }
 
     record Report(String id, String owner, String name, String category, String type,
@@ -238,10 +75,6 @@ public final class CampusFind {
         private Map<String, String> fields() {
             return Map.of("id", id, "name", name, "category", category, "type", type, "date", date,
                     "location", location, "description", description, "image", image);
-        }
-
-        private String json() {
-            return object(fields());
         }
     }
 
