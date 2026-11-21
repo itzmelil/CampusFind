@@ -12,33 +12,21 @@ This is the **Second Deliverable — Initial Progress (50%)**. The Office and St
 | Zen Afi Inarsao | UI/UX design and documentation |
 | Heinz Colman | Coding |
 
-## Run the Java desktop app
+## Run the Java website
 
-On Windows, extract the repository ZIP and open the project folder. Double-click **`run-desktop.bat`**, or run `./run-desktop.bat` from PowerShell. The launcher compiles the Swing app with the Java 21 JDK and opens the desktop window. A browser and a running HTTP server are optional for this version.
+1. Clone or download and extract this repository. In VS Code, open the project folder and choose **Terminal → New Terminal**.
+2. With Java 21 or later installed, run this command from the project root.
 
-On macOS or Linux, run these commands from the project folder with the Java 21 JDK:
-
-```sh
-mkdir -p build/desktop
-javac -encoding UTF-8 -d build/desktop src/main/java/campusfind/CampusFind.java src/main/java/campusfind/CampusFindDesktop.java
-java -cp build/desktop campusfind.CampusFindDesktop
-```
-
-The desktop version includes the Office overview, Campus Board, item details, Student demo, My Reports, Alerts, Safety, and the report form and preview. It uses the same Java validation and report storage as the web version. Desktop submissions appear under the desktop demo profile in My Reports.
-
-## Run the web version locally
-
-1. Clone or download this repository and open a terminal in its root directory.
-2. With Java 21 or later installed, run the Java source from the repository root.
-
-   ```sh
+   ```powershell
    java src/main/java/campusfind/CampusFind.java
    ```
 
-3. Open [http://127.0.0.1:8000](http://127.0.0.1:8000) in a modern browser.
-4. Select **Student sign in**, then **Open Student demo** to enter the Student workspace.
+3. Leave the terminal open and visit [http://127.0.0.1:8000](http://127.0.0.1:8000).
+4. To enter the Student workspace, select **Student sign in**, then **Open Student demo**.
 
-The application uses Java for report validation, search, filtering, and storage. The browser interface uses HTML, CSS, and JavaScript. Java source-file mode launches the app without a separate build or dependency installation. To use a different port, add it as the first argument, for example `java src/main/java/campusfind/CampusFind.java 8080`.
+Java serves the site and handles validation, search, filtering, and report storage. The browser interface uses HTML, CSS, and JavaScript. To use a different port, pass it as the first argument, for example `java src/main/java/campusfind/CampusFind.java 8080`.
+
+The optional Swing desktop version can still be launched on Windows with `run-desktop.bat`.
 
 ## Current functionality
 
@@ -51,7 +39,7 @@ Student sign-in uses a demo profile. Submitted reports persist in the local Java
 
 ## Screenshots
 
-The [screenshots folder](screenshots/) contains labeled desktop captures from the running application.
+The [screenshots folder](screenshots/) contains labeled browser screenshots from the running Java website.
 
 | Panel | Office | Student |
 | --- | --- | --- |
