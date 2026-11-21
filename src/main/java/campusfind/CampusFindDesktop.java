@@ -202,7 +202,11 @@ public final class CampusFindDesktop extends JPanel {
                         }), button("Back to overview", -1, false, () -> go(Page.HOME))));
             }
         }
-        frame.add(scroll(content));
+        JScrollPane body = scroll(content);
+        if (page == Page.BOARD || (page == Page.HOME && !student)) {
+            body.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
+        }
+        frame.add(body);
         return frame;
     }
 
