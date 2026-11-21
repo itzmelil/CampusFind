@@ -24,7 +24,7 @@ This is the **Second Deliverable — Initial Progress (50%)**. The Office and St
 3. Leave the terminal open and visit [http://127.0.0.1:8000](http://127.0.0.1:8000).
 4. To enter the Student workspace, select **Student sign in**, then **Open Student demo**.
 
-Java serves the site and handles validation, search, filtering, and report storage. The browser interface uses HTML, CSS, and JavaScript. To use a different port, pass it as the first argument, for example `java src/main/java/campusfind/CampusFind.java 8080`.
+Java 21 is the only runtime you need to install for CampusFind. It serves the site and handles validation, search, filtering, and report storage. The browser interface uses HTML, CSS, and JavaScript. To use a different port, pass it as the first argument, for example `java src/main/java/campusfind/CampusFind.java 8080`.
 
 The optional Swing desktop version can still be launched on Windows with `run-desktop.bat`.
 
