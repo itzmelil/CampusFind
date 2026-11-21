@@ -277,7 +277,7 @@ public final class CampusFindDesktop extends JPanel {
 
     private void drawTiltedPhoto(Graphics graphics, String file, int x, int y, int size, int angle) {
         Graphics2D g = (Graphics2D) graphics.create();
-        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
         g.rotate(Math.toRadians(angle), x + size / 2.0, y + size / 2.0);
         g.setClip(new java.awt.geom.RoundRectangle2D.Double(x, y, size, size, 15, 15));
         g.drawImage(image(file), x, y, size, size, null);
@@ -695,13 +695,19 @@ public final class CampusFindDesktop extends JPanel {
     private Icon photo(Report report, int size) {
         if (report.image().isEmpty()) return null;
         BufferedImage source = image(report.image());
-        BufferedImage thumbnail = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g = thumbnail.createGraphics();
-        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-        g.setClip(new java.awt.geom.RoundRectangle2D.Double(0, 0, size, size, 13, 13));
-        g.drawImage(source, 0, 0, size, size, null);
-        g.dispose();
-        return new ImageIcon(thumbnail);
+        return new Icon() {
+            @Override public int getIconWidth() { return size; }
+            @Override public int getIconHeight() { return size; }
+
+            @Override
+            public void paintIcon(Component component, Graphics graphics, int x, int y) {
+                Graphics2D g = (Graphics2D) graphics.create();
+                g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+                g.clip(new java.awt.geom.RoundRectangle2D.Double(x, y, size, size, 13, 13));
+                g.drawImage(source, x, y, size, size, component);
+                g.dispose();
+            }
+        };
     }
 
     private static JPanel card() {
