@@ -2,7 +2,7 @@
 
 CampusFind is a campus lost-and-found Java Swing desktop app for the **University of Mindanao, Matina campus, Davao City**. Campus visitors can browse and search item reports, submit lost or found items, and find staffed handoff locations. The Student workspace adds a personal reports view and an alerts panel.
 
-This is the **Second Deliverable — Initial Progress (50%)**. The Office and Student screens follow the [CampusFind Figma design](https://www.figma.com/design/YbUwzz01yEYvIQve4k4m9l/DSA?node-id=0-1).
+The project began with the [CCE105 Part 1 proposal](https://docs.google.com/document/d/15kb3jI6KoL90oz5e96Uc2aEJgSGppZpLM61noghPekM/edit?tab=t.0). The Office and Student screens follow the [CampusFind Figma design](https://www.figma.com/design/YbUwzz01yEYvIQve4k4m9l/DSA?node-id=0-1).
 
 ## Team
 
@@ -36,8 +36,21 @@ java -cp build/desktop campusfind.CampusFindDesktop
 - Campus board with search, status and category filters, and report details.
 - Lost and found report forms with validation, a preview, and local submission.
 - My Reports, alerts, and safety pages with example handoff locations.
+- Possible matches on report details when an opposite-type report shares the category and meaningful item words.
 
 Student sign-in uses a local demo profile. Submitted reports persist in the project’s `data/` directory and appear on the campus board and in My Reports. Handoff locations and campus listings are illustrative. Account authentication, live alerts, and claims processing are outside this milestone.
+
+## Data structures and algorithms
+
+| Proposal item | Use in CampusFind |
+| --- | --- |
+| ArrayList | Holds the ordered report collection and search results. |
+| HashMap | Indexes reports by ID for the details view and groups them by category. |
+| Linear search | Checks the selected category’s reports, or the full collection, for a case-insensitive keyword substring and the selected status. Search includes the ID, name, category, description, and location. |
+| Merge sort | Orders saved reports by creation time and possible matches by relevance score. Sorting takes O(n log n) time and O(n) auxiliary space for n entries. |
+| Rule-based suggestions | Finds lost and found reports in the same category with shared words in the names or descriptions. Shared location words improve the score. The three highest-scoring results appear in item details. |
+
+The proposal’s LinkedList and binary search tree describe the earlier system the team analyzed.
 
 ## Screenshots
 

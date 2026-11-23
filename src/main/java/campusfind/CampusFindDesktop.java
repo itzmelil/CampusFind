@@ -2,6 +2,7 @@ package campusfind;
 
 import campusfind.CampusFind.Report;
 import campusfind.CampusFind.ReportStore;
+import campusfind.CampusFind.ReportIndex;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -31,6 +32,7 @@ public final class CampusFindDesktop extends JPanel {
     private final BufferedImage brandLogo;
     private final Map<String, BufferedImage> images = new HashMap<>();
     private List<Report> saved;
+    private ReportIndex reportIndex;
     private boolean student;
     private Page page = Page.HOME;
     private String query = "";
@@ -49,6 +51,7 @@ public final class CampusFindDesktop extends JPanel {
     CampusFindDesktop(Path directory) throws IOException {
         store = new ReportStore(directory);
         saved = store.all();
+        reportIndex = new ReportIndex(saved);
         brandLogo = Files.isRegularFile(Path.of(LOGO_PATH)) ? image(LOGO_PATH) : null;
         setLayout(new BorderLayout());
         setBackground(PAPER);
@@ -200,6 +203,7 @@ public final class CampusFindDesktop extends JPanel {
                         "Review the report and find a safe handoff location.");
                 summary(content, selected, actions(button("View handoff locations", true, () -> go(Page.SAFETY)),
                         button("Back to campus board", false, () -> go(Page.BOARD))));
+                showMatches(content);
             }
             case MINE -> {
                 intro(content, "STUDENT WORKSPACE", "My reports & claims", "Track your reports and staffed handoffs.");
@@ -348,7 +352,7 @@ public final class CampusFindDesktop extends JPanel {
         if (!query.isBlank()) content.add(actions(label("Results for “" + query + "”", 12, MUTED, false),
                 button("Clear search", false, () -> search(""))));
         content.add(Box.createVerticalStrut(10));
-        List<Report> visible = CampusFind.filterReports(all(), query, status, category);
+        List<Report> visible = reportIndex.search(query, status, category);
         if (visible.isEmpty()) content.add(label("No items match your search.", 14, MUTED, true));
         else content.add(itemGrid(visible));
     }
@@ -360,7 +364,7 @@ public final class CampusFindDesktop extends JPanel {
     }
 
     private JButton itemCard(Report report) {
-        JButton card = button("", false, () -> details(report));
+        JButton card = button("", false, () -> details(report.id()));
         card.setLayout(new BorderLayout(8, 0));
         card.setBorder(new EmptyBorder(8, 8, 8, 8));
         card.getAccessibleContext().setAccessibleName(report.name());
@@ -383,8 +387,8 @@ public final class CampusFindDesktop extends JPanel {
         return card;
     }
 
-    private void details(Report report) {
-        selected = report;
+    private void details(String reportId) {
+        selected = reportIndex.get(reportId);
         go(Page.DETAILS);
     }
 
@@ -461,6 +465,7 @@ public final class CampusFindDesktop extends JPanel {
             var updated = new ArrayList<>(saved);
             updated.addFirst(store.save(draft, DESKTOP_OWNER));
             saved = List.copyOf(updated);
+            reportIndex = new ReportIndex(saved);
             draft = null;
             query = "";
             status = "all";
@@ -506,6 +511,16 @@ public final class CampusFindDesktop extends JPanel {
         card.add(Box.createVerticalStrut(12));
         card.add(buttons);
         content.add(card);
+    }
+
+    private void showMatches(JPanel content) {
+        List<Report> matches = reportIndex.suggestedMatches(selected);
+        if (matches.isEmpty()) return;
+        content.add(Box.createVerticalStrut(16));
+        content.add(label("Possible matches", 18, INK, true));
+        content.add(copy("Compare the details before arranging a handoff.", 435, MUTED));
+        content.add(Box.createVerticalStrut(8));
+        content.add(itemGrid(matches));
     }
 
     private void safety(JPanel content) {
@@ -565,7 +580,7 @@ public final class CampusFindDesktop extends JPanel {
             content.add(label("Latest reports", 15, INK, true));
             content.add(button("View all", Glyph.ARROW, false, () -> go(Page.BOARD)));
             for (Report report : all().stream().limit(3).toList()) {
-                JButton latest = button("", false, () -> details(report));
+                JButton latest = button("", false, () -> details(report.id()));
                 latest.getAccessibleContext().setAccessibleName(report.name());
                 latest.setLayout(new BorderLayout(6, 0));
                 if (!report.image().isEmpty()) latest.add(new JLabel(photo(report, 31)), BorderLayout.WEST);
@@ -603,9 +618,7 @@ public final class CampusFindDesktop extends JPanel {
     }
 
     private List<Report> all() {
-        var all = new ArrayList<>(saved);
-        all.addAll(CampusFind.SAMPLES);
-        return all;
+        return reportIndex.all();
     }
 
     private void intro(JPanel content, String tag, String title, String text) {

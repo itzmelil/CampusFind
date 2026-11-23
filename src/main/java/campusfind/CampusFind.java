@@ -6,10 +6,13 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.UUID;
 
 public final class CampusFind {
@@ -27,13 +30,105 @@ public final class CampusFind {
 
     private CampusFind() {}
 
-    static List<Report> filterReports(List<Report> reports, String search, String status, String category) {
-        String query = search.strip().toLowerCase(Locale.ROOT);
-        return reports.stream().filter(report ->
-                (status.equals("all") || report.type.equals(status))
-                && (category.equals("All items") || report.category.equals(category))
-                && String.join(" ", report.name, report.category, report.location)
-                         .toLowerCase(Locale.ROOT).contains(query)).toList();
+    static final class ReportIndex {
+        private final List<Report> reports;
+        private final Map<String, Report> byId = new HashMap<>();
+        private final Map<String, List<Report>> byCategory = new HashMap<>();
+
+        ReportIndex(List<Report> saved) {
+            reports = new ArrayList<>(saved.size() + SAMPLES.size());
+            reports.addAll(saved);
+            reports.addAll(SAMPLES);
+            for (Report report : reports) {
+                byId.put(report.id(), report);
+                byCategory.computeIfAbsent(report.category(), category -> new ArrayList<>()).add(report);
+            }
+        }
+
+        List<Report> all() { return List.copyOf(reports); }
+
+        Report get(String id) { return byId.get(id); }
+
+        List<Report> search(String text, String status, String category) {
+            String query = normalize(text).strip();
+            List<Report> candidates = category.equals("All items") ? reports : inCategory(category);
+            var matches = new ArrayList<Report>();
+            for (Report report : candidates) {
+                if (!status.equals("all") && !report.type().equals(status)) continue;
+                String searchable = String.join(" ", report.id(), report.name(), report.category(),
+                        report.description(), report.location());
+                if (normalize(searchable).contains(query)) matches.add(report);
+            }
+            return matches;
+        }
+
+        List<Report> suggestedMatches(Report target) {
+            var ranked = new ArrayList<ScoredReport>();
+            Set<String> targetWords = itemWords(target);
+            Set<String> targetLocation = words(target.location());
+            for (Report candidate : inCategory(target.category())) {
+                if (candidate.type().equals(target.type())) continue;
+                int itemWords = overlap(targetWords, itemWords(candidate));
+                int locationWords = overlap(targetLocation, words(candidate.location()));
+                if (itemWords > 0) ranked.add(new ScoredReport(candidate, 3 * itemWords + locationWords));
+            }
+            mergeSort(ranked, Comparator.comparingInt(ScoredReport::score).reversed());
+            return ranked.stream().limit(3).map(ScoredReport::report).toList();
+        }
+
+        private List<Report> inCategory(String category) {
+            return byCategory.getOrDefault(category, List.of());
+        }
+    }
+
+    private record ScoredReport(Report report, int score) {}
+
+    private static final Set<String> COMMON_WORDS = Set.of(
+            "the", "and", "with", "from", "near", "this", "that", "found", "lost", "item", "items", "campus", "matina");
+
+    private static String normalize(String value) {
+        return value.toLowerCase(Locale.ROOT);
+    }
+
+    private static Set<String> itemWords(Report report) {
+        String description = report.id().startsWith("sample-") ? "" : report.description();
+        return words(report.name() + " " + description);
+    }
+
+    private static Set<String> words(String text) {
+        var result = new HashSet<String>();
+        for (String word : normalize(text).split("[^\\p{L}\\p{N}]+")) {
+            if (word.length() >= 3 && !COMMON_WORDS.contains(word)) result.add(word);
+        }
+        return result;
+    }
+
+    private static int overlap(Set<String> first, Set<String> second) {
+        int count = 0;
+        for (String word : first) if (second.contains(word)) count++;
+        return count;
+    }
+
+    private static <T> void mergeSort(List<T> values, Comparator<? super T> order) {
+        mergeSort(values, new ArrayList<>(values), 0, values.size(), order);
+    }
+
+    private static <T> void mergeSort(List<T> values, List<T> buffer, int start, int end,
+                                      Comparator<? super T> order) {
+        if (end - start < 2) return;
+        int middle = (start + end) >>> 1;
+        mergeSort(values, buffer, start, middle, order);
+        mergeSort(values, buffer, middle, end, order);
+        for (int i = start; i < end; i++) buffer.set(i, values.get(i));
+        int left = start;
+        int right = middle;
+        for (int i = start; i < end; i++) {
+            if (right == end || (left < middle && order.compare(buffer.get(left), buffer.get(right)) <= 0)) {
+                values.set(i, buffer.get(left++));
+            } else {
+                values.set(i, buffer.get(right++));
+            }
+        }
     }
 
     static Report validateReport(Map<String, String> fields) {
@@ -116,7 +211,8 @@ public final class CampusFind {
                     stored.add(fields);
                 }
             }
-            stored.sort(Comparator.comparing((Properties p) -> p.getProperty("created", "")).reversed());
+            mergeSort(stored, Comparator.comparingLong((Properties p) -> Long.parseLong(p.getProperty("created", "0")))
+                    .reversed().thenComparing(p -> p.getProperty("id", "")));
             return stored.stream().map(p -> new Report(
                     p.getProperty("id"), p.getProperty("owner"), p.getProperty("name"), p.getProperty("category"),
                     p.getProperty("type"), p.getProperty("date"), p.getProperty("location"),
